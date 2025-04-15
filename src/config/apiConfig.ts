@@ -33,6 +33,42 @@ export interface ApiRequestBody {
 }
 
 /**
+ * API response detail item structure
+ */
+interface ApiResponseDetail {
+  allocated_amount: number;
+  expected_apy: number;
+  expected_fee_apr?: number;
+  expected_profit: number;
+  expected_total_apr?: number;
+  index: number;
+  percentage: number;
+  type: 'pool' | 'reserve';
+}
+
+/**
+ * Raw API response structure
+ */
+interface RawApiResponse {
+  details: ApiResponseDetail[];
+  pool1_supply: number;
+  pool2_supply: number;
+  reserve3_supply: number;
+  reserve4_supply: number;
+  total_profit: number;
+}
+
+/**
+ * Processed API response for frontend use
+ */
+export interface ApiResponse {
+  investments: Investment[];      // Individual allocations
+  total_profit: number;          // Expected total profit
+  total_expected_return: number; // Overall expected APY
+  total_funds: number;           // Total amount distributed
+}
+
+/**
  * Represents a single investment allocation
  */
 export interface Investment {
@@ -40,17 +76,6 @@ export interface Investment {
   allocation: number;     // Amount allocated
   expected_return: number; // Predicted APY
   type: 'pool' | 'reserve'; // Investment type
-}
-
-/**
- * Structure for API response
- * Contains calculated distribution and expected returns
- */
-export interface ApiResponse {
-  investments: Investment[];      // Individual allocations
-  total_profit: number;          // Expected total profit
-  total_expected_return: number; // Overall expected APY
-  total_funds: number;           // Total amount distributed
 }
 
 /**
@@ -86,7 +111,7 @@ export const DEMO_DATA: ApiResponse = {
   ],
   total_profit: 5423.4,
   total_expected_return: 0.05423,
-  total_funds: 100000
+  total_funds: 800000
 };
 
 /**
@@ -111,23 +136,57 @@ export function generateApiRequestBody(reserves: Reserve[], totalFunds: number, 
  * @throws Error if API request fails
  */
 export async function fetchDistribution(requestBody: ApiRequestBody): Promise<ApiResponse> {
-  console.log('Request body:', requestBody);
+  try {
+    console.log('Request body:', requestBody);
 
-  const response = await fetch(process.env.NEXT_PUBLIC_API_URL!, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json'
-    },
-    body: JSON.stringify(requestBody)
-  });
+    // Ensure URL exists
+    if (!process.env.NEXT_PUBLIC_API_URL) {
+      throw new Error('API URL is not configured');
+    }
 
-  if (!response.ok) {
-    console.error('Response error:', response.status, response.statusText);
-    throw new Error(`API error: ${response.status} ${response.statusText}`);
+    const response = await fetch(process.env.NEXT_PUBLIC_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'No error details available');
+      console.error('API Response Error:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorText
+      });
+      throw new Error(`API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data: RawApiResponse = await response.json();
+    console.log('Server response:', data);
+
+    // Transform API response to match our interface
+    const transformedData: ApiResponse = {
+      investments: data.details.map(item => ({
+        name: item.type === 'pool' 
+          ? `Pool-${item.index}` 
+          : `Reserve-${item.index}`,
+        allocation: item.allocated_amount,
+        expected_return: item.percentage,
+        type: item.type
+      })),
+      total_profit: data.total_profit,
+      total_expected_return: data.total_profit / requestBody.total_funds,
+      total_funds: requestBody.total_funds
+    };
+
+    return transformedData;
+  } catch (error) {
+    console.error('Fetch error:', error);
+    if (error instanceof Error) {
+      throw new Error(`Failed to fetch distribution: ${error.message}`);
+    }
+    throw new Error('Failed to fetch distribution');
   }
-
-  const data = await response.json();
-  console.log('Server response:', data);
-  return data;
 } 

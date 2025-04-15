@@ -6,7 +6,7 @@ export const SAMPLE_POOLS: Pool[] = [
     chain: "mantle"
   },
   {
-    address: "0x9876abcd1234ef5678901234abcdef5678901234",
+    address: "0xe50019c79cbd7c49cffa7c3f8080ea238de75962",
     chain: "mantle"
   }
 ];
@@ -30,7 +30,7 @@ export const SAMPLE_RESERVES: Reserve[] = [
     optimal_usage_ratio: 0.75,
     variable_rate_slope1: 0.11,
     variable_rate_slope2: 0.7,
-    token_price: 3500,
+    token_price: 1,
     fee_percentage: 0.05,
     base_variable_borrow_rate: 0.02
   }

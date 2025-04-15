@@ -94,9 +94,11 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
     setError(null);
 
     try {
+      const defaultSupply = parseInt(process.env.NEXT_PUBLIC_DEFAULT_SUPPLY || '100000');
+
       const requestBody = generateApiRequestBody(
         SAMPLE_RESERVES,
-        100000, // Default supply amount
+        defaultSupply,
         SAMPLE_POOLS
       );
 
@@ -121,11 +123,13 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
   };
 
   // Transforms allocation data for pie chart visualization
-  const pieData = allocation.map((item) => ({
-    title: item.name,
-    value: item.percentage,
-    color: item.color,
-  }));
+  const pieData = allocation
+    .filter(item => item.allocation > 0)
+    .map((item) => ({
+      title: item.name,
+      value: item.percentage,
+      color: item.color,
+    }));
 
   return (
     <div className="container mx-auto px-8 py-12">
@@ -213,8 +217,12 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
                   <span className="text-white">{item.name}</span>
                 </div>
                 <div className="flex flex-1 justify-end gap-8">
-                  <span className="text-white w-24 text-right">${item.allocation.toLocaleString()}</span>
-                  <span className="text-[#34D399] w-20 text-right">{(item.expected_return * 100).toFixed(2)}%</span>
+                  <span className="text-white w-24 text-right">
+                    ${item.allocation.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                  <span className="text-[#34D399] w-20 text-right">
+                    {item.expected_return.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%
+                  </span>
                 </div>
               </div>
             ))}
@@ -222,11 +230,15 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
               <div className="pt-4 mt-4 border-t border-[#1E2633]">
                 <div className="flex items-center">
                   <span className="text-[#34D399] flex-[2]">Total Profit</span>
-                  <span className="text-[#34D399] flex-1 text-right">${distribution.total_profit.toFixed(2)}</span>
+                  <span className="text-[#34D399] flex-1 text-right">
+                    ${distribution.total_profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
                 </div>
                 <div className="flex items-center mt-2">
                   <span className="text-[#34D399] flex-[2]">Total Expected Return</span>
-                  <span className="text-[#34D399] flex-1 text-right">{(distribution.total_expected_return * 100).toFixed(2)}%</span>
+                  <span className="text-[#34D399] flex-1 text-right">
+                    {(distribution.total_expected_return * 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%
+                  </span>
                 </div>
               </div>
             )}
