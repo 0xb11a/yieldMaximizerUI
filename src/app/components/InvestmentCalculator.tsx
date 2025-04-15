@@ -1,15 +1,20 @@
 'use client';
 
 import { useState } from 'react';
-import { PieChart } from 'react-minimal-pie-chart';
+import dynamic from 'next/dynamic';
 
-interface DataEntry {
-  title: string;
-  value: number;
+const PieChart = dynamic(
+  () => import('react-minimal-pie-chart').then((mod) => mod.PieChart),
+  { ssr: false }
+);
+
+interface AllocationItem {
+  name: string;
+  percentage: number;
   color: string;
 }
 
-const ALLOCATION = [
+const ALLOCATION: AllocationItem[] = [
   { name: 'USDC/ETH Pool', percentage: 25, color: '#10B981' },
   { name: 'USDC Reserve', percentage: 20, color: '#EC4899' },
   { name: 'ETH Reserve', percentage: 20, color: '#F59E0B' },
@@ -57,9 +62,7 @@ export default function InvestmentCalculator() {
               lineWidth={20}
               paddingAngle={2}
               rounded
-              label={({ dataEntry }: { dataEntry: DataEntry }) => 
-                Math.round(dataEntry.value) + '%'
-              }
+              label={({ dataEntry }) => Math.round(dataEntry.value) + '%'}
               labelStyle={{
                 fontSize: '6px',
                 fill: '#fff',
