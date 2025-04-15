@@ -23,7 +23,7 @@ const ALLOCATION: AllocationItem[] = [
 ];
 
 export default function InvestmentCalculator() {
-  const [amount, setAmount] = useState('');
+  const [isConnected, setIsConnected] = useState(false);
 
   const pieData = ALLOCATION.map((item) => ({
     title: item.name,
@@ -31,24 +31,40 @@ export default function InvestmentCalculator() {
     color: item.color,
   }));
 
+  const handleDistribute = () => {
+    // This will be implemented in the future to recalculate distribution
+    console.log('Distributing funds...');
+  };
+
   return (
     <div className="container mx-auto px-8 py-12">
-      <h1 className="text-3xl font-bold mb-8">Investment Calculator</h1>
+      <h1 className="text-3xl font-bold mb-8">Vaults Calculator</h1>
       
-      {/* Investment Amount Input */}
+      {/* Wallet Connection Section */}
       <div className="card p-8 mb-12">
-        <label className="block text-[#9CA3AF] mb-2">Investment Amount</label>
-        <div className="relative">
-          <input
-            type="number"
-            className="input pr-16"
-            placeholder="Enter amount"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
-          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[#9CA3AF]">
-            USD
-          </span>
+        <div className="flex flex-col gap-4">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-xl font-semibold mb-2">Wallet Connection</h2>
+              <p className="text-[#9CA3AF]">
+                {isConnected ? 'Wallet connected' : 'Connect your wallet to start'}
+              </p>
+            </div>
+            <button
+              onClick={() => setIsConnected(!isConnected)}
+              className="px-6 py-3 bg-[#1E2633] hover:bg-[#2D3748] text-white rounded-lg transition-colors"
+            >
+              {isConnected ? 'Disconnect' : 'Connect Wallet'}
+            </button>
+          </div>
+          {isConnected && (
+            <button
+              onClick={handleDistribute}
+              className="w-full px-6 py-3 bg-[#10B981] hover:bg-[#059669] text-white rounded-lg transition-colors"
+            >
+              Distribute Funds
+            </button>
+          )}
         </div>
       </div>
 
