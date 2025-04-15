@@ -1,12 +1,17 @@
+'use client';
+
+import { useState } from 'react';
 import Header from './components/Header';
 import InvestmentCalculator from './components/InvestmentCalculator';
 
 export default function Home() {
+  const [useDemo, setUseDemo] = useState(false);
+
   return (
     <div className="min-h-screen bg-[#111827]">
-      <Header />
+      <Header onDemoChange={setUseDemo} />
       <main>
-        <InvestmentCalculator />
+        <InvestmentCalculator useDemo={useDemo} />
       </main>
       <footer className="border-t border-[#1E2633] py-8">
         <div className="container mx-auto px-8 flex justify-between items-center">

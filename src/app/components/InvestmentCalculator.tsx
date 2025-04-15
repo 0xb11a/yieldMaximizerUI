@@ -1,9 +1,21 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import PoolInfo from './PoolInfo';
+import ReserveInfo from './ReserveInfo';
+import { 
+  generateApiRequestBody, 
+  fetchDistribution, 
+  type Reserve, 
+  type ApiResponse,
+  type Pool,
+  DEMO_DATA
+} from '@/config/apiConfig';
+import { SAMPLE_POOLS, SAMPLE_RESERVES } from '@/config/poolsAndReserves';
+import { getInvestmentColor } from '@/styles/colors';
 
+// Load PieChart component dynamically to avoid SSR issues
 const PieChart = dynamic(
   () => import('react-minimal-pie-chart').then((mod) => mod.PieChart),
   { ssr: false }
@@ -13,105 +25,102 @@ interface AllocationItem {
   name: string;
   percentage: number;
   color: string;
+  type: 'pool' | 'reserve';
+  expected_return: number;
+  allocation: number;
 }
 
-// Demo data
-const DEMO_DATA = {
-  reserves: {
-    reserve1: {
-      total_borrowed: 179954,
-      total_supplied: 370406,
-      optimal_usage_ratio: 0.85,
-      variable_rate_slope1: 0.08,
-      variable_rate_slope2: 0.8,
-      token_price: 1,
-    },
-    reserve2: {
-      total_borrowed: 522821,
-      total_supplied: 1792518,
-      optimal_usage_ratio: 0.75,
-      variable_rate_slope1: 0.11,
-      variable_rate_slope2: 0.7,
-      token_price: 1,
-    },
-    reserve3: {
-      total_borrowed: 400000,
-      total_supplied: 1200000,
-      optimal_usage_ratio: 0.8,
-      variable_rate_slope1: 0.09,
-      variable_rate_slope2: 0.75,
-      token_price: 1,
-    }
-  },
-  distribution: {
-    fund1_supply: 68830.86,
-    fund2_supply: 6671.54,
-    fund3_supply: 24497.60,
-    total_profit: 1123.79
-  }
-};
+const INITIAL_ALLOCATION: AllocationItem[] = [];
 
-const INITIAL_ALLOCATION: AllocationItem[] = [
-  { name: 'USDC Reserve', percentage: 0, color: '#EC4899' },
-  { name: 'ETH Reserve', percentage: 0, color: '#F59E0B' },
-  { name: 'BTC Reserve', percentage: 0, color: '#F97316' },
-];
+interface InvestmentCalculatorProps {
+  useDemo?: boolean;
+}
 
-export default function InvestmentCalculator() {
+export default function InvestmentCalculator({ useDemo = false }: InvestmentCalculatorProps) {
   const [isConnected, setIsConnected] = useState(false);
   const [isDistributed, setIsDistributed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [allocation, setAllocation] = useState(INITIAL_ALLOCATION);
+  const [distribution, setDistribution] = useState<ApiResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const calculateDistribution = () => {
-    const total = DEMO_DATA.distribution.fund1_supply + 
-                 DEMO_DATA.distribution.fund2_supply + 
-                 DEMO_DATA.distribution.fund3_supply;
+  // Processes API response into formatted allocation data with consistent coloring
+  const calculateDistribution = (apiResponse: ApiResponse) => {
+    const pools = apiResponse.investments.filter(inv => inv.type === 'pool');
+    const reserves = apiResponse.investments.filter(inv => inv.type === 'reserve');
 
     return [
-      { 
-        name: 'USDC Reserve', 
-        percentage: Math.round((DEMO_DATA.distribution.fund1_supply / total) * 100), 
-        color: '#EC4899' 
-      },
-      { 
-        name: 'ETH Reserve', 
-        percentage: Math.round((DEMO_DATA.distribution.fund2_supply / total) * 100), 
-        color: '#F59E0B' 
-      },
-      { 
-        name: 'BTC Reserve', 
-        percentage: Math.round((DEMO_DATA.distribution.fund3_supply / total) * 100), 
-        color: '#F97316' 
-      },
+      ...pools.map((investment, index) => ({
+        name: investment.name,
+        percentage: Math.round((investment.allocation / apiResponse.total_funds) * 100),
+        color: getInvestmentColor('pool', index),
+        type: investment.type,
+        expected_return: investment.expected_return,
+        allocation: investment.allocation
+      })),
+      ...reserves.map((investment, index) => ({
+        name: investment.name,
+        percentage: Math.round((investment.allocation / apiResponse.total_funds) * 100),
+        color: getInvestmentColor('reserve', index),
+        type: investment.type,
+        expected_return: investment.expected_return,
+        allocation: investment.allocation
+      }))
     ];
   };
 
-  const handleDistribute = async () => {
-    setIsLoading(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    const newAllocation = calculateDistribution();
-    setAllocation(newAllocation);
-    setIsDistributed(true);
-    setIsLoading(false);
-  };
-
-  const calculateAPY = (reserve: any) => {
-    const utilizationRate = reserve.total_borrowed / reserve.total_supplied;
-    let interestRate;
-    
-    if (utilizationRate <= reserve.optimal_usage_ratio) {
-      interestRate = (utilizationRate * reserve.variable_rate_slope1) / reserve.optimal_usage_ratio;
-    } else {
-      const normalRate = reserve.variable_rate_slope1;
-      const excessUtilization = (utilizationRate - reserve.optimal_usage_ratio) / (1 - reserve.optimal_usage_ratio);
-      interestRate = normalRate + (excessUtilization * reserve.variable_rate_slope2);
+  // Automatically calculate distribution when using demo mode
+  useEffect(() => {
+    if (useDemo && isConnected) {
+      const newAllocation = calculateDistribution(DEMO_DATA);
+      setDistribution(DEMO_DATA);
+      setAllocation(newAllocation);
+      setIsDistributed(true);
+      setError(null);
     }
-    
-    return (interestRate * 100).toFixed(2);
+  }, [useDemo, isConnected]);
+
+  // Handles fund distribution calculation, either with demo or API data
+  const handleDistribute = async () => {
+    if (useDemo) {
+      const newAllocation = calculateDistribution(DEMO_DATA);
+      setDistribution(DEMO_DATA);
+      setAllocation(newAllocation);
+      setIsDistributed(true);
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const requestBody = generateApiRequestBody(
+        SAMPLE_RESERVES,
+        100000, // Default supply amount
+        SAMPLE_POOLS
+      );
+
+      const data = await fetchDistribution(requestBody);
+      const newAllocation = calculateDistribution(data);
+      
+      setDistribution(data);
+      setAllocation(newAllocation);
+      setIsDistributed(true);
+    } catch (err) {
+      const errorMessage = err instanceof Error 
+        ? err.message.includes('Failed to fetch')
+          ? 'Unable to connect to the server.'
+          : err.message
+        : 'An unexpected error occurred';
+      
+      setError(errorMessage);
+      console.error('Error:', err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
+  // Transforms allocation data for pie chart visualization
   const pieData = allocation.map((item) => ({
     title: item.name,
     value: item.percentage,
@@ -138,6 +147,8 @@ export default function InvestmentCalculator() {
                 if (!isConnected) {
                   setIsDistributed(false);
                   setAllocation(INITIAL_ALLOCATION);
+                  setDistribution(null);
+                  setError(null);
                 }
               }}
               className="px-6 py-3 bg-[#1E2633] hover:bg-[#2D3748] text-white rounded-lg transition-colors"
@@ -155,6 +166,11 @@ export default function InvestmentCalculator() {
             >
               {isLoading ? 'Calculating Distribution...' : 'Distribute Funds'}
             </button>
+          )}
+          {error && (
+            <div className="text-red-500 text-sm mt-2">
+              {error}
+            </div>
           )}
         </div>
       </div>
@@ -187,23 +203,30 @@ export default function InvestmentCalculator() {
         <div className="card p-8">
           <h2 className="text-xl font-semibold mb-6">Allocation</h2>
           <div className="space-y-4">
-            {allocation.map((item) => (
-              <div key={item.name} className="flex justify-between items-center">
-                <div className="flex items-center gap-2">
+            {allocation.map((item, index) => (
+              <div key={item.name} className="flex items-center">
+                <div className="flex items-center gap-2 flex-[2]">
                   <div
                     className="w-3 h-3 rounded-full"
                     style={{ backgroundColor: item.color }}
                   />
                   <span className="text-white">{item.name}</span>
                 </div>
-                <span className="text-white">{item.percentage}%</span>
+                <div className="flex flex-1 justify-end gap-8">
+                  <span className="text-white w-24 text-right">${item.allocation.toLocaleString()}</span>
+                  <span className="text-[#34D399] w-20 text-right">{(item.expected_return * 100).toFixed(2)}%</span>
+                </div>
               </div>
             ))}
-            {isDistributed && (
+            {distribution && (
               <div className="pt-4 mt-4 border-t border-[#1E2633]">
-                <div className="flex justify-between items-center text-[#34D399]">
-                  <span>Total Profit</span>
-                  <span>${DEMO_DATA.distribution.total_profit.toFixed(2)}</span>
+                <div className="flex items-center">
+                  <span className="text-[#34D399] flex-[2]">Total Profit</span>
+                  <span className="text-[#34D399] flex-1 text-right">${distribution.total_profit.toFixed(2)}</span>
+                </div>
+                <div className="flex items-center mt-2">
+                  <span className="text-[#34D399] flex-[2]">Total Expected Return</span>
+                  <span className="text-[#34D399] flex-1 text-right">{(distribution.total_expected_return * 100).toFixed(2)}%</span>
                 </div>
               </div>
             )}
@@ -211,44 +234,55 @@ export default function InvestmentCalculator() {
         </div>
       </div>
 
-      {/* Pool & Reserve Information */}
-      {isDistributed && (
+      {/* Pool & Reserves Information */}
+      {isDistributed && distribution && (
         <>
           <h2 className="text-2xl font-bold mt-12 mb-6">Pool & Reserves Information</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 animate-fadeIn">
-            <PoolInfo
-              title="USDC Reserve"
-              icon="#EC4899"
-              data={{
-                totalValueLocked: `$${DEMO_DATA.reserves.reserve1.total_supplied.toLocaleString()}`,
-                utilizationRate: `${((DEMO_DATA.reserves.reserve1.total_borrowed / DEMO_DATA.reserves.reserve1.total_supplied) * 100).toFixed(1)}%`,
-                apy: `${calculateAPY(DEMO_DATA.reserves.reserve1)}%`,
-                volume24h: `$${(DEMO_DATA.reserves.reserve1.total_borrowed * 0.1).toLocaleString()}`,
-                fees: `${(DEMO_DATA.reserves.reserve1.variable_rate_slope1 * 100).toFixed(1)}%`,
-              }}
-            />
-            <PoolInfo
-              title="ETH Reserve"
-              icon="#F59E0B"
-              data={{
-                totalValueLocked: `$${DEMO_DATA.reserves.reserve2.total_supplied.toLocaleString()}`,
-                utilizationRate: `${((DEMO_DATA.reserves.reserve2.total_borrowed / DEMO_DATA.reserves.reserve2.total_supplied) * 100).toFixed(1)}%`,
-                apy: `${calculateAPY(DEMO_DATA.reserves.reserve2)}%`,
-                volume24h: `$${(DEMO_DATA.reserves.reserve2.total_borrowed * 0.1).toLocaleString()}`,
-                fees: `${(DEMO_DATA.reserves.reserve2.variable_rate_slope1 * 100).toFixed(1)}%`,
-              }}
-            />
-            <PoolInfo
-              title="BTC Reserve"
-              icon="#F97316"
-              data={{
-                totalValueLocked: `$${DEMO_DATA.reserves.reserve3.total_supplied.toLocaleString()}`,
-                utilizationRate: `${((DEMO_DATA.reserves.reserve3.total_borrowed / DEMO_DATA.reserves.reserve3.total_supplied) * 100).toFixed(1)}%`,
-                apy: `${calculateAPY(DEMO_DATA.reserves.reserve3)}%`,
-                volume24h: `$${(DEMO_DATA.reserves.reserve3.total_borrowed * 0.1).toLocaleString()}`,
-                fees: `${(DEMO_DATA.reserves.reserve3.variable_rate_slope1 * 100).toFixed(1)}%`,
-              }}
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 animate-fadeIn">
+            {/* Pools */}
+            {SAMPLE_POOLS.map((pool, index) => {
+              const investment = distribution.investments.find(
+                inv => inv.type === 'pool' && inv.name === `Pool-${pool.address.slice(2, 10)}`
+              );
+              return (
+                <PoolInfo
+                  key={pool.address}
+                  title={`Pool ${index + 1}`}
+                  address={pool.address}
+                  chain={pool.chain}
+                  color={getInvestmentColor('pool', index)}
+                  data={{
+                    allocation: investment 
+                      ? `$${investment.allocation.toLocaleString()}`
+                      : '$0',
+                    expectedReturn: investment
+                      ? `${(investment.expected_return * 100).toFixed(2)}%`
+                      : '0%'
+                  }}
+                />
+              );
+            })}
+            
+            {/* Reserves */}
+            {SAMPLE_RESERVES.map((reserve, index) => {
+              const investment = distribution.investments.find(
+                inv => inv.type === 'reserve' && inv.name === reserve.name
+              );
+              return (
+                <ReserveInfo
+                  key={reserve.name}
+                  title={reserve.name}
+                  color={getInvestmentColor('reserve', index)}
+                  data={{
+                    totalValueLocked: `$${reserve.total_supplied.toLocaleString()}`,
+                    volume24h: `$${(reserve.total_borrowed * 0.1).toLocaleString()}`,
+                    utilizationRate: `${((reserve.total_borrowed / reserve.total_supplied) * 100).toFixed(1)}%`,
+                    baseFee: `${(reserve.fee_percentage * 100).toFixed(1)}%`,
+                    baseAPY: `${(reserve.base_variable_borrow_rate * 100).toFixed(2)}%`
+                  }}
+                />
+              );
+            })}
           </div>
         </>
       )}
