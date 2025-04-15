@@ -5,9 +5,7 @@ interface PoolInfoProps {
   icon: string;
   data: {
     volume24h?: string;
-    liquidity?: string;
     fees?: string;
-    apr?: string;
     totalValueLocked?: string;
     utilizationRate?: string;
     apy?: string;
@@ -16,7 +14,7 @@ interface PoolInfoProps {
 
 export default function PoolInfo({ title, icon, data }: PoolInfoProps) {
   return (
-    <div className="card">
+    <div className="card transform transition-all duration-500 hover:scale-[1.02]">
       <div className="p-6 border-b border-[#1E2633]">
         <div className="flex items-center gap-3">
           <div
@@ -27,46 +25,34 @@ export default function PoolInfo({ title, icon, data }: PoolInfoProps) {
         </div>
       </div>
       <div className="p-6 space-y-4">
+        {data.totalValueLocked && (
+          <div className="flex justify-between animate-fadeIn">
+            <span className="text-[#9CA3AF]">Total Value Locked</span>
+            <span className="text-white font-medium">{data.totalValueLocked}</span>
+          </div>
+        )}
         {data.volume24h && (
-          <div className="flex justify-between">
+          <div className="flex justify-between animate-fadeIn">
             <span className="text-[#9CA3AF]">Volume 24h</span>
             <span className="text-white">{data.volume24h}</span>
           </div>
         )}
-        {data.liquidity && (
-          <div className="flex justify-between">
-            <span className="text-[#9CA3AF]">Liquidity</span>
-            <span className="text-white">{data.liquidity}</span>
-          </div>
-        )}
-        {data.fees && (
-          <div className="flex justify-between">
-            <span className="text-[#9CA3AF]">Fees</span>
-            <span className="text-white">{data.fees}</span>
-          </div>
-        )}
-        {data.apr && (
-          <div className="flex justify-between">
-            <span className="text-[#9CA3AF]">APR</span>
-            <span className="text-[#34D399]">{data.apr}</span>
-          </div>
-        )}
-        {data.totalValueLocked && (
-          <div className="flex justify-between">
-            <span className="text-[#9CA3AF]">Total Value Locked</span>
-            <span className="text-white">{data.totalValueLocked}</span>
-          </div>
-        )}
         {data.utilizationRate && (
-          <div className="flex justify-between">
+          <div className="flex justify-between animate-fadeIn">
             <span className="text-[#9CA3AF]">Utilization Rate</span>
             <span className="text-white">{data.utilizationRate}</span>
           </div>
         )}
+        {data.fees && (
+          <div className="flex justify-between animate-fadeIn">
+            <span className="text-[#9CA3AF]">Base Fee</span>
+            <span className="text-white">{data.fees}</span>
+          </div>
+        )}
         {data.apy && (
-          <div className="flex justify-between">
+          <div className="flex justify-between animate-fadeIn">
             <span className="text-[#9CA3AF]">APY</span>
-            <span className="text-[#34D399]">{data.apy}</span>
+            <span className="text-[#34D399] font-medium">{data.apy}</span>
           </div>
         )}
       </div>
