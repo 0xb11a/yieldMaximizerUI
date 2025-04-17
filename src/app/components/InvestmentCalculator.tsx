@@ -12,10 +12,14 @@ import {
   type Investment,
   DEMO_DATA
 } from '@/config/apiConfig';
-import { SAMPLE_POOLS, SAMPLE_RESERVES, TOTAL_FUNDS } from '@/config/poolsAndReserves';
+import { SAMPLE_POOLS, SAMPLE_RESERVES } from '@/config/poolsAndReserves';
 import { getInvestmentColor } from '@/styles/colors';
 // Import Recharts components
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+// Import wagmi hooks
+import { useAccount, useConnect, useDisconnect, useBalance } from 'wagmi';
+import { injected } from 'wagmi/connectors'; // Import the connector
+import { formatEther } from 'viem'; // Import formatEther
 
 
 // Remove dynamic import for PieChart
@@ -46,7 +50,20 @@ interface InvestmentCalculatorProps {
 }
 
 export default function InvestmentCalculator({ useDemo = false }: InvestmentCalculatorProps) {
-  const [isConnected, setIsConnected] = useState(false);
+  // Replace useState for connection with wagmi hooks
+  // const [isConnected, setIsConnected] = useState(false);
+  const { address, isConnected, isConnecting } = useAccount();
+  const { connect } = useConnect();
+  const { disconnect } = useDisconnect();
+  // Add useBalance hook
+  const { 
+    data: balanceData, 
+    isLoading: isBalanceLoading, 
+    isError: isBalanceError 
+  } = useBalance({
+    address: address, // Fetch balance for the connected address
+  });
+
   const [isDistributed, setIsDistributed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [allocation, setAllocation] = useState<AllocationItem[]>(INITIAL_ALLOCATION);
@@ -56,6 +73,14 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
   // const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   // const [tooltipData, setTooltipData] = useState<TooltipData | null>(null);
 
+  // State to track client-side mounting
+  const [isClient, setIsClient] = useState(false);
+
+  // Get demo funds from environment variable with fallback
+  const demoFundsEnv = process.env.NEXT_PUBLIC_DEMO_FUNDS;
+  const DEMO_TOTAL_FUNDS = demoFundsEnv && !isNaN(parseFloat(demoFundsEnv)) 
+                           ? parseFloat(demoFundsEnv) 
+                           : 500000; // Fallback value
 
   // Processes API response into formatted allocation data
   const calculateDistribution = (apiResponse: ApiResponse): AllocationItem[] => {
@@ -84,40 +109,57 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
     return calculatedAllocation.filter(item => item.allocation > 0);
   };
 
-  // useEffect remains the same
+  // useEffect to set isClient to true after mounting
   useEffect(() => {
-    if (useDemo && isConnected) {
-      const newAllocation = calculateDistribution(DEMO_DATA);
-      setDistribution(DEMO_DATA);
-      setAllocation(newAllocation);
-      setIsDistributed(true);
-      setError(null);
-    }
-  }, [useDemo, isConnected]);
+    setIsClient(true);
+  }, []);
 
-  // handleDistribute remains largely the same, remove hover state reset
+  // Updated handleDistribute
   const handleDistribute = async () => {
-    // setHoveredIndex(null);
-    // setTooltipData(null);
-    
-    if (useDemo) {
-      const newAllocation = calculateDistribution(DEMO_DATA);
-      setDistribution(DEMO_DATA);
-      setAllocation(newAllocation);
-      setIsDistributed(true);
-      return;
-    }
-
     setIsLoading(true);
     setError(null);
 
-    try {
-      const requestBody = generateApiRequestBody(
+    let requestBody;
+    let totalFundsForCalc: number;
+
+    if (useDemo) {
+      // Demo Mode Logic
+      totalFundsForCalc = DEMO_TOTAL_FUNDS; // Use value from env/fallback
+      console.log(`Running in Demo Mode with ${totalFundsForCalc} funds`);
+      requestBody = generateApiRequestBody(
         SAMPLE_RESERVES,
-        TOTAL_FUNDS,
+        totalFundsForCalc, 
         SAMPLE_POOLS
       );
+    } else {
+      // Real Mode Logic
+      // Check if balance is loaded and valid
+      if (!balanceData || isBalanceLoading || isBalanceError) {
+        setError('Could not fetch wallet balance or balance is zero.'); 
+        console.error('Balance Error or Loading:', { balanceData, isBalanceLoading, isBalanceError });
+        setIsLoading(false); // Stop loading
+        return; // Don't proceed if balance isn't ready
+      }
 
+      // Convert balance from wei (BigInt) to Ether (number)
+      totalFundsForCalc = parseFloat(formatEther(balanceData.value));
+      
+      // Check if balance is greater than zero
+      if (totalFundsForCalc <= 0) {
+         setError('Wallet balance is zero. Please add funds.');
+         setIsLoading(false); // Stop loading
+         return; // Don't proceed with zero balance
+      }
+      
+      requestBody = generateApiRequestBody(
+        SAMPLE_RESERVES,
+        totalFundsForCalc, 
+        SAMPLE_POOLS
+      );
+    }
+
+    // Common logic for both demo and real mode
+    try {
       const data = await fetchDistribution(requestBody);
       const newAllocation = calculateDistribution(data);
       
@@ -125,21 +167,17 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
       setAllocation(newAllocation);
       setIsDistributed(true);
     } catch (err) {
-      let errorMessage = 'An unexpected error occurred'; // Default message
+      // Error handling remains the same
+      let errorMessage = 'An unexpected error occurred';
       if (err instanceof Error) {
-        // Check for specific network error (connection refused, DNS error, etc.)
         if (err.message.includes('Failed to fetch') || err instanceof TypeError) { 
            errorMessage = 'Unable to connect to the server.';
         } else {
-           // For other errors (like 500, 400, etc.), use a more generic server error message
            errorMessage = 'An error occurred while fetching data from the server.';
-           // Optionally, you could try to parse err.message if the server sends specific details
-           // errorMessage = err.message; 
         }
       } 
-      
       setError(errorMessage);
-      console.error('Error:', err); // Log the actual error for debugging
+      console.error('Distribution Error:', err);
       setAllocation(INITIAL_ALLOCATION); 
       setDistribution(null);
       setIsDistributed(false);
@@ -192,65 +230,99 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
       {/* <CustomTooltip /> */}
       <h1 className="text-3xl font-bold mb-8">Yield Maximizer</h1>
       
-      {/* Wallet Connection Section (remains the same) */}
+      {/* Wallet Connection Section - Updated with hydration fix */}
       <div className="card p-8 mb-12">
          <div className="flex flex-col gap-4">
           <div className="flex justify-between items-center">
             <div>
               <h2 className="text-xl font-semibold mb-2">Wallet Connection</h2>
               <p className="text-[#9CA3AF]">
-                {isConnected ? 'Wallet connected' : 'Connect your wallet to start'}
+                {/* Render placeholder text until component has mounted */}
+                {!isClient ? 'Loading...' : 
+                  isConnecting ? 'Connecting...' : 
+                  isConnected ? `Connected: ${address?.slice(0, 6)}...${address?.slice(-4)}` : 
+                  'Connect your wallet to start'
+                }
               </p>
             </div>
             <button
               onClick={() => {
-                setIsConnected(!isConnected);
-                if (!isConnected) {
-                  setIsDistributed(false);
-                  setAllocation(INITIAL_ALLOCATION);
-                  setDistribution(null);
-                  setError(null);
-                  // Remove hover state reset
-                  // setHoveredIndex(null);
-                  // setTooltipData(null);
+                if (isConnected) {
+                  disconnect();
+                } else {
+                  // Connect using the injected connector (e.g., Rabby/MetaMask)
+                  connect({ connector: injected() }); 
                 }
               }}
-              className="px-6 py-3 bg-[#1E2633] hover:bg-[#2D3748] text-white rounded-lg transition-colors"
+              // Disable button only if isConnecting OR if not mounted yet (optional, but good practice)
+              disabled={!isClient || isConnecting} 
+              className="px-6 py-3 bg-[#1E2633] hover:bg-[#2D3748] text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait"
             >
-              {isConnected ? 'Disconnect' : 'Connect Wallet'}
+              {/* Render placeholder text until component has mounted */}
+              {!isClient ? 'Loading...' : 
+                 isConnecting ? 'Connecting...' : 
+                 isConnected ? 'Disconnect' : 
+                 'Connect Wallet'
+              }
             </button>
           </div>
-          {isConnected && (
+          {/* Show Distribute button logic - simplified for demo mode */}
+          {isClient && (useDemo || isConnected) && ( // Show if demo OR connected
             <button
               onClick={handleDistribute}
-              disabled={isLoading}
+              // Disable logic: Disable if API is loading. If not demo, also disable if balance is loading/error/zero
+              disabled={isLoading || (!useDemo && (isBalanceLoading || isBalanceError || !balanceData || parseFloat(formatEther(balanceData.value)) <= 0))}
               className={`w-full px-6 py-3 bg-[#10B981] hover:bg-[#059669] text-white rounded-lg transition-colors ${
-                isLoading ? 'opacity-50 cursor-not-allowed' : ''
+                (isLoading || (!useDemo && (isBalanceLoading || isBalanceError || !balanceData || parseFloat(formatEther(balanceData.value)) <= 0)))
+                 ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
-              {isLoading ? 'Calculating Distribution...' : 'Distribute Funds'}
+              {isLoading 
+                ? 'Calculating Distribution...' 
+                : (!useDemo && isBalanceLoading) // Show balance loading only in non-demo mode
+                ? 'Fetching Balance...' 
+                : (!useDemo && isBalanceError) // Show balance error only in non-demo mode
+                ? 'Balance Error'
+                : `Distribute ${useDemo ? 'Demo ' : ''}Funds` // Add 'Demo' text if applicable
+              }
             </button>
-          )}
-          {error && (
+           )}
+           {/* Show balance error only in non-demo mode */}
+           {!useDemo && isBalanceError && isClient && isConnected && (
+             <div className="text-red-500 text-sm mt-2">
+                Error fetching balance. Please try again.
+             </div>
+           )}
+           {error && (
             <div className="text-red-500 text-sm mt-2">
-              {error}
+              {error} // Show general errors (API errors, balance zero errors, etc.)
             </div>
-          )}
+           )}
         </div>
       </div>
 
-      {/* Distribution and Allocation Section */}
+      {/* Distribution and Allocation Section - Conditional rendering also checks isClient */}
       <div className={`grid grid-cols-1 md:grid-cols-2 gap-8 transition-opacity duration-500 ${
-        isDistributed && allocation.length > 0 ? 'opacity-100' : 'opacity-0'
+        // Show if distributed AND (demo OR connected AND client mounted)
+        isDistributed && (useDemo || (isClient && isConnected)) && allocation.length > 0 ? 'opacity-100' : 'opacity-0 h-0 overflow-hidden'
       }`}>
         {/* Distribution Chart -> Now BarChart */}
         <div className="card p-8">
           <h2 className="text-xl font-semibold mb-2">Distribution</h2>
-          {isDistributed && (
+          {/* Update Your Supply display for demo mode */}
+          {(useDemo || (isClient && isConnected)) && isDistributed && (
              <p className="text-base text-white mb-4">
                Your Supply:&nbsp;
                <span className="font-semibold">
-                 ${TOTAL_FUNDS.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {useDemo 
+                 ? `$${(DEMO_TOTAL_FUNDS).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Demo)`
+                 : isBalanceLoading 
+                 ? 'Loading...' 
+                 : isBalanceError 
+                 ? 'Error' 
+                 : balanceData 
+                 ? `${balanceData.formatted} ${balanceData.symbol}`
+                 : 'N/A'}
                </span>
              </p>
           )}
@@ -292,7 +364,7 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
               </div>
               <div className="flex flex-1 justify-end gap-8 p-1">
                  {/* Removed Allocation Amount header - Add placeholder for alignment */}
-                 <span className="w-24 text-right">&nbsp;</span> 
+                 <span className="w-24 text-right">&nbsp;</span>
                  <span className="w-20 text-right">APY</span>
               </div>
             </div>
@@ -333,8 +405,7 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
                   {/* Changed label to Total APY */}
                   <span className="text-[#34D399] flex-[2]">Total APY</span>
                   <span className="text-[#34D399] flex-1 text-right">
-                    {(distribution.total_expected_return * 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%
-                  </span>
+                    {(distribution.total_expected_return * 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%                  </span>
                 </div>
               </div>
             )}
@@ -342,55 +413,78 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
         </div>
       </div>
 
-      {/* Pool & Reserves Information (remains the same) */}
-      {isDistributed && distribution && (
+      {/* Pool & Reserves Information - Conditional rendering with filtering */}
+      {isDistributed && (useDemo || (isClient && isConnected)) && distribution && (
         <>
           <h2 className="text-2xl font-bold mt-12 mb-6">Pools & Reserves Information</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 animate-fadeIn">
-            {/* Pools */} 
-            {SAMPLE_POOLS.map((pool, index) => {
-              const investment = distribution.investments.find(
-                inv => inv.type === 'pool' && inv.name === pool.name 
-              );
-              return (
-                <PoolInfo
-                  key={pool.address}
-                  title={pool.name || `Pool ${index + 1}`}
-                  address={pool.address}
-                  chain={pool.chain}
-                  color={getInvestmentColor('pool', index)}
-                  data={{
-                    allocation: investment 
-                      ? `$${investment.allocation.toLocaleString()}`
-                      : '$0',
-                    expectedReturn: investment
-                      ? `${(investment.expected_return * 100).toFixed(2)}%`
-                      : '0%'
-                  }}
-                />
-              );
+            {/* Filter and map Pools */}
+            {SAMPLE_POOLS
+              .filter(pool => {
+                // Find corresponding investment in the distribution results
+                const investment = distribution.investments.find(
+                  inv => inv.type === 'pool' && inv.name === pool.name 
+                );
+                // Keep the pool only if an investment exists and allocation > 0
+                return investment && investment.allocation > 0;
+              })
+              .map((pool, index) => {
+                // We know the investment exists from the filter above, find it again
+                const investment = distribution.investments.find(
+                  inv => inv.type === 'pool' && inv.name === pool.name 
+                )!; // Add non-null assertion as we filtered already
+
+                return (
+                  <PoolInfo
+                    key={pool.address}
+                    title={pool.name || `Pool ${index + 1}`}
+                    address={pool.address}
+                    chain={pool.chain}
+                    // Use a stable color index based on original SAMPLE_POOLS index if possible
+                    // This prevents colors shifting when items are filtered out
+                    color={getInvestmentColor('pool', SAMPLE_POOLS.findIndex(p => p.address === pool.address))}
+                    data={{
+                      allocation: `$${investment.allocation.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                      expectedReturn: `${(investment.expected_return * 100).toFixed(2)}%`
+                    }}
+                  />
+                );
             })}
             
-            {/* Reserves */}
-            {SAMPLE_RESERVES.map((reserve, index) => {
-              const investment = distribution.investments.find(
-                inv => inv.type === 'reserve' && inv.name === reserve.name
-              );
-              return (
-                <ReserveInfo
-                  key={reserve.name}
-                  title={reserve.name}
-                  color={getInvestmentColor('reserve', index)}
-                  data={{
-                    totalValueLocked: `$${reserve.total_supplied.toLocaleString()}`,
-                    utilizationRate: reserve.total_supplied > 0 
-                      ? `${((reserve.total_borrowed / reserve.total_supplied) * 100).toFixed(1)}%`
-                      : '0.0%',
-                    baseFee: `${(reserve.fee_percentage * 100).toFixed(1)}%`,
-                    baseAPY: `${(reserve.base_variable_borrow_rate * 100).toFixed(2)}%`
-                  }}
-                />
-              );
+            {/* Filter and map Reserves */}
+            {SAMPLE_RESERVES
+              .filter(reserve => {
+                 // Find corresponding investment in the distribution results
+                const investment = distribution.investments.find(
+                  inv => inv.type === 'reserve' && inv.name === reserve.name
+                );
+                 // Keep the reserve only if an investment exists and allocation > 0
+                return investment && investment.allocation > 0;
+              })
+              .map((reserve, index) => {
+                 // We know the investment exists from the filter above
+                const investment = distribution.investments.find(
+                  inv => inv.type === 'reserve' && inv.name === reserve.name
+                )!;
+
+                return (
+                  <ReserveInfo
+                    key={reserve.name}
+                    title={reserve.name}
+                    // Use a stable color index based on original SAMPLE_RESERVES index
+                    color={getInvestmentColor('reserve', SAMPLE_RESERVES.findIndex(r => r.name === reserve.name))}
+                    data={{
+                      // Note: ReserveInfo shows general reserve stats, not allocation specific
+                      // If you wanted to show allocated amount here, add it to ReserveInfo props
+                      totalValueLocked: `$${reserve.total_supplied.toLocaleString()}`,
+                      utilizationRate: reserve.total_supplied > 0 
+                        ? `${((reserve.total_borrowed / reserve.total_supplied) * 100).toFixed(1)}%`
+                        : '0.0%',
+                      baseFee: `${(reserve.fee_percentage * 100).toFixed(1)}%`,
+                      baseAPY: `${(reserve.base_variable_borrow_rate * 100).toFixed(2)}%`
+                    }}
+                  />
+                );
             })}
           </div>
         </>

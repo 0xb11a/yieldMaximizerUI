@@ -1,7 +1,5 @@
 import { Pool, Reserve } from './apiConfig';
 
-export const TOTAL_FUNDS = 1000000;
-
 export const SAMPLE_POOLS: Pool[] = [
   {
     name: "USDC/USDT pool",
@@ -29,8 +27,8 @@ export const SAMPLE_RESERVES: Reserve[] = [
   },
   {
     name: "USDT Reserve",
-    total_borrowed: 245690,
-    total_supplied: 664390,
+    total_borrowed: 281050,
+    total_supplied: 1150000,
     optimal_usage_ratio: 0.85,
     variable_rate_slope1: 0.08,
     variable_rate_slope2: 0.8,
