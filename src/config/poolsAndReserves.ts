@@ -2,11 +2,13 @@ import { Pool, Reserve } from './apiConfig';
 
 export const SAMPLE_POOLS: Pool[] = [
   {
-    address: "0x7ccd8a769d466340fff36c6e10ffa8cf9077d988",
+    name: "USDC/USDT pool",
+    address: "0x48c1a89af1102cad358549e9bb16ae5f96cddfec",
     chain: "mantle"
   },
   {
-    address: "0xe50019c79cbd7c49cffa7c3f8080ea238de75962",
+    name: "USDe/USDT pool",
+    address: "0x7ccd8a769d466340fff36c6e10ffa8cf9077d988",
     chain: "mantle"
   }
 ];
@@ -14,8 +16,8 @@ export const SAMPLE_POOLS: Pool[] = [
 export const SAMPLE_RESERVES: Reserve[] = [
   {
     name: "USDC Reserve",
-    total_borrowed: 179954,
-    total_supplied: 370406,
+    total_borrowed: 168180,
+    total_supplied: 598650,
     optimal_usage_ratio: 0.85,
     variable_rate_slope1: 0.08,
     variable_rate_slope2: 0.8,
@@ -24,14 +26,14 @@ export const SAMPLE_RESERVES: Reserve[] = [
     base_variable_borrow_rate: 0.03
   },
   {
-    name: "ETH Reserve",
-    total_borrowed: 522821,
-    total_supplied: 1792518,
-    optimal_usage_ratio: 0.75,
-    variable_rate_slope1: 0.11,
-    variable_rate_slope2: 0.7,
+    name: "USDT Reserve",
+    total_borrowed: 245690,
+    total_supplied: 664390,
+    optimal_usage_ratio: 0.85,
+    variable_rate_slope1: 0.08,
+    variable_rate_slope2: 0.8,
     token_price: 1,
-    fee_percentage: 0.05,
+    fee_percentage: 0.08,
     base_variable_borrow_rate: 0.02
   }
 ]; 

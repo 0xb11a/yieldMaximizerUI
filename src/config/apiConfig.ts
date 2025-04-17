@@ -19,6 +19,7 @@ export interface Reserve {
  */
 export interface Pool {
   address: string;  // Contract address of the pool
+  name: string;     // Name of the pool
   chain: string;    // Blockchain network identifier
 }
 
@@ -168,14 +169,34 @@ export async function fetchDistribution(requestBody: ApiRequestBody): Promise<Ap
 
     // Transform API response to match our interface
     const transformedData: ApiResponse = {
-      investments: data.details.map(item => ({
-        name: item.type === 'pool' 
-          ? `Pool-${item.index}` 
-          : `Reserve-${item.index}`,
-        allocation: item.allocated_amount,
-        expected_return: item.percentage,
-        type: item.type
-      })),
+      investments: data.details.map(item => {
+        let name = `Unknown-${item.index}`; // Default name
+        const poolCount = requestBody.pools.length;
+        if (item.type === 'pool') {
+          // API index is 1-based, array index is 0-based
+          const poolIndex = item.index - 1;
+          if (poolIndex >= 0 && poolIndex < poolCount && requestBody.pools[poolIndex]) {
+            name = requestBody.pools[poolIndex].name;
+          } else {
+            name = `Pool-${item.index}`; // Fallback if index is invalid
+          }
+        } else {
+          // API index is 1-based and continues after pools. Array index is 0-based.
+          const reserveIndex = item.index - poolCount - 1; 
+          if (reserveIndex >= 0 && reserveIndex < requestBody.reserves.length && requestBody.reserves[reserveIndex]) {
+            name = requestBody.reserves[reserveIndex].name; 
+          } else {
+            name = `Reserve-${item.index}`; // Fallback if index is invalid
+          }
+        }
+
+        return {
+          name: name,
+          allocation: item.allocated_amount,
+          expected_return: item.expected_apy, // Use expected_apy from API response
+          type: item.type
+        };
+      }),
       total_profit: data.total_profit,
       total_expected_return: data.total_profit / requestBody.total_funds,
       total_funds: requestBody.total_funds

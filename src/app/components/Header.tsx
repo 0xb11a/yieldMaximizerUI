@@ -20,7 +20,7 @@ export default function Header({ onDemoChange }: DevMenuProps) {
       <div className="container mx-auto px-8 py-6 flex justify-between items-center">
         <div className="flex items-center">
           <Link href="/" className="text-2xl font-bold gradient-text">
-            CryptoCalc
+            Yield maximizer
           </Link>
         </div>
         

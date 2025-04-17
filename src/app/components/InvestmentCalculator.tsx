@@ -133,7 +133,7 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
 
   return (
     <div className="container mx-auto px-8 py-12">
-      <h1 className="text-3xl font-bold mb-8">Vaults Calculator</h1>
+      <h1 className="text-3xl font-bold mb-8">Calculator</h1>
       
       {/* Wallet Connection Section */}
       <div className="card p-8 mb-12">
