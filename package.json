@@ -9,10 +9,12 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@types/recharts": "^1.8.29",
     "next": "15.3.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-minimal-pie-chart": "^9.1.0"
+    "react-minimal-pie-chart": "^9.1.0",
+    "recharts": "^2.15.2"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

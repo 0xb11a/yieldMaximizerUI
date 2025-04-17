@@ -1,5 +1,7 @@
 import { Pool, Reserve } from './apiConfig';
 
+export const TOTAL_FUNDS = 1000000;
+
 export const SAMPLE_POOLS: Pool[] = [
   {
     name: "USDC/USDT pool",
