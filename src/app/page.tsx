@@ -15,7 +15,7 @@ export default function Home() {
       </main>
       <footer className="border-t border-[#1E2633] py-8">
         <div className="container mx-auto px-8 flex justify-between items-center">
-          <p className="text-[#9CA3AF]">© 2025 CryptoCalc. All rights reserved.</p>
+          <p className="text-[#9CA3AF]">© 2025 b11a. All rights reserved.</p>
           <div className="flex gap-6">
             <a href="#" className="text-[#9CA3AF] hover:text-white">
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">

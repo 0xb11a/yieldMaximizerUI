@@ -5,7 +5,6 @@ interface ReserveInfoProps {
   color: string;
   data: {
     totalValueLocked: string;
-    volume24h: string;
     utilizationRate: string;
     baseFee: string;
     baseAPY: string;
@@ -26,12 +25,6 @@ export default function ReserveInfo({ title, color, data }: ReserveInfoProps) {
           <div className="flex justify-between animate-fadeIn">
             <span className="text-[#9CA3AF]">Total Value Locked</span>
             <span className="text-white font-medium">{data.totalValueLocked}</span>
-          </div>
-        )}
-        {data.volume24h && (
-          <div className="flex justify-between animate-fadeIn">
-            <span className="text-[#9CA3AF]">Volume 24h</span>
-            <span className="text-white">{data.volume24h}</span>
           </div>
         )}
         {data.utilizationRate && (

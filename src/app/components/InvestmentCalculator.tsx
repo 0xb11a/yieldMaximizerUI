@@ -190,7 +190,7 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
     <div className="container mx-auto px-8 py-12">
       {/* Remove old tooltip */}
       {/* <CustomTooltip /> */}
-      <h1 className="text-3xl font-bold mb-8">Calculator</h1>
+      <h1 className="text-3xl font-bold mb-8">Yield Maximizer</h1>
       
       {/* Wallet Connection Section (remains the same) */}
       <div className="card p-8 mb-12">
@@ -245,7 +245,15 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
       }`}>
         {/* Distribution Chart -> Now BarChart */}
         <div className="card p-8">
-          <h2 className="text-xl font-semibold mb-6">Distribution</h2>
+          <h2 className="text-xl font-semibold mb-2">Distribution</h2>
+          {isDistributed && (
+             <p className="text-base text-white mb-4">
+               Your Supply:&nbsp;
+               <span className="font-semibold">
+                 ${TOTAL_FUNDS.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+               </span>
+             </p>
+          )}
           {/* Use ResponsiveContainer for BarChart */}
           <div style={{ width: '100%', height: 300 }}>
             <ResponsiveContainer>
@@ -274,11 +282,6 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
         {/* Allocation List (remove hover effect tied to PieChart) */}
         <div className="card p-8">
           <h2 className="text-xl font-semibold mb-2">Allocation</h2>
-          {isDistributed && (
-             <p className="text-sm text-[#9CA3AF] mb-4">
-               Total Funds Allocated: ${TOTAL_FUNDS.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-             </p>
-          )}
           <div className="space-y-2">
             {/* Allocation List Headers - Keep only APY */} 
             <div className="flex items-center text-xs text-[#9CA3AF] font-semibold mb-2">
@@ -342,7 +345,7 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
       {/* Pool & Reserves Information (remains the same) */}
       {isDistributed && distribution && (
         <>
-          <h2 className="text-2xl font-bold mt-12 mb-6">Pool & Reserves Information</h2>
+          <h2 className="text-2xl font-bold mt-12 mb-6">Pools & Reserves Information</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 animate-fadeIn">
             {/* Pools */} 
             {SAMPLE_POOLS.map((pool, index) => {
@@ -380,7 +383,6 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
                   color={getInvestmentColor('reserve', index)}
                   data={{
                     totalValueLocked: `$${reserve.total_supplied.toLocaleString()}`,
-                    volume24h: `$${(reserve.total_borrowed * 0.1).toLocaleString()}`,
                     utilizationRate: reserve.total_supplied > 0 
                       ? `${((reserve.total_borrowed / reserve.total_supplied) * 100).toFixed(1)}%`
                       : '0.0%',
