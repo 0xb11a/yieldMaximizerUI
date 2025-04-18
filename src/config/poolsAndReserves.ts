@@ -2,38 +2,36 @@ import { Pool, Reserve } from './apiConfig';
 
 export const SAMPLE_POOLS: Pool[] = [
   {
-    name: "USDC/USDT pool",
-    address: "0x48c1a89af1102cad358549e9bb16ae5f96cddfec",
-    chain: "mantle"
-  },
-  {
-    name: "USDe/USDT pool",
-    address: "0x7ccd8a769d466340fff36c6e10ffa8cf9077d988",
-    chain: "mantle"
+    name: "USDC/USDT_MM",
+    daily_fee: 41.64,
+    pool_distribution: 473625,
+    protocol_fee: 0,
+    reward_per_day: 5127,
+    reward_token_price: 0.02535
   }
 ];
 
 export const SAMPLE_RESERVES: Reserve[] = [
   {
-    name: "USDC Reserve",
-    total_borrowed: 168180,
-    total_supplied: 598650,
+    name: "USDC Reserve Lendle",
+    total_borrowed: 171898,
+    total_supplied: 548269,
     optimal_usage_ratio: 0.85,
     variable_rate_slope1: 0.08,
     variable_rate_slope2: 0.8,
     token_price: 1,
     fee_percentage: 0.08,
-    base_variable_borrow_rate: 0.03
+    base_variable_borrow_rate: 0
   },
   {
-    name: "USDT Reserve",
-    total_borrowed: 281050,
-    total_supplied: 1150000,
+    name: "USDT Reserve Lendle",
+    total_borrowed: 303980,
+    total_supplied: 1145332,
     optimal_usage_ratio: 0.85,
     variable_rate_slope1: 0.08,
     variable_rate_slope2: 0.8,
     token_price: 1,
     fee_percentage: 0.08,
-    base_variable_borrow_rate: 0.02
+    base_variable_borrow_rate: 0
   }
 ]; 

@@ -33,8 +33,11 @@ interface AllocationItem {
   percentage: number;
   color: string;
   type: 'pool' | 'reserve';
-  expected_return: number;
+  expected_return: number; // Total APY
   allocation: number;
+  expectedProfit: number;  // Added profit specific to this allocation
+  reserve_apy?: number;   // APY from reserve/fees
+  rewards_apy?: number;   // APY from rewards
 }
 
 const INITIAL_ALLOCATION: AllocationItem[] = [];
@@ -91,19 +94,25 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
     const calculatedAllocation: AllocationItem[] = [
       ...pools.map((investment, index) => ({
         name: investment.name,
-        percentage: parseFloat(((investment.allocation / validTotalFunds) * 100).toFixed(2)), // Use parseFloat for number type
+        percentage: parseFloat(((investment.allocation / validTotalFunds) * 100).toFixed(2)),
         color: getInvestmentColor('pool', index),
         type: investment.type,
         expected_return: investment.expected_return,
-        allocation: investment.allocation
+        allocation: investment.allocation,
+        expectedProfit: investment.expectedProfit, // Copy profit
+        reserve_apy: investment.reserve_apy,
+        rewards_apy: investment.rewards_apy
       })),
       ...reserves.map((investment, index) => ({
         name: investment.name,
-        percentage: parseFloat(((investment.allocation / validTotalFunds) * 100).toFixed(2)), // Use parseFloat for number type
+        percentage: parseFloat(((investment.allocation / validTotalFunds) * 100).toFixed(2)),
         color: getInvestmentColor('reserve', index),
         type: investment.type,
         expected_return: investment.expected_return,
-        allocation: investment.allocation
+        allocation: investment.allocation,
+        expectedProfit: investment.expectedProfit, // Copy profit
+        reserve_apy: investment.reserve_apy,
+        rewards_apy: investment.rewards_apy
       }))
     ];
     return calculatedAllocation.filter(item => item.allocation > 0);
@@ -200,12 +209,25 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
   const CustomBarTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload; // Access the full data item
+      const formatApy = (apy: number | undefined) => 
+        apy !== undefined ? `${apy.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : 'N/A';
+      // Helper to format profit
+      const formatProfit = (profit: number | undefined) =>
+        profit !== undefined ? `$${profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A';
+
       return (
         <div className="bg-gray-800 text-white p-3 rounded shadow-lg text-sm">
           <p className="font-semibold">{`${label}`}</p>
           <p>{`Allocation: $${data.allocation.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</p>
-          <p>{`Distribution Percentage: ${data.percentage}%`}</p>
-          <p>{`APY: ${data.expected_return.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`}</p>
+          <p>{`Percentage: ${data.percentage}%`}</p>
+          <p>{`Expected Profit: ${formatProfit(data.expectedProfit)}`}</p>
+          <p>{`Total APY: ${formatApy(data.expected_return)}`}</p>
+          {data.reserve_apy !== undefined && (
+            <p className="text-xs pl-2">{`└ Reserve APY: ${formatApy(data.reserve_apy)}`}</p>
+          )}
+          {data.rewards_apy !== undefined && (
+            <p className="text-xs pl-2">{`└ Rewards APY: ${formatApy(data.rewards_apy)}`}</p>
+          )}
         </div>
       );
     }
@@ -352,60 +374,67 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
         </div>
 
         {/* Allocation List (remove hover effect tied to PieChart) */}
-        <div className="card p-8">
+        <div className="card p-8 flex flex-col"> 
           <h2 className="text-xl font-semibold mb-2">Allocation</h2>
-          <div className="space-y-2">
-            {/* Allocation List Headers - Keep only APY */} 
+          {/* Remove flex-grow from this div */}
+          <div className="space-y-2"> 
+            {/* Allocation List Headers - Add APY Breakdown */}
             <div className="flex items-center text-xs text-[#9CA3AF] font-semibold mb-2">
-              {/* Removed Asset header */}
               <div className="flex items-center gap-2 flex-[2] p-1">
-                 {/* Empty div to maintain layout */}
-                 <span>&nbsp;</span> 
+                 <span>Asset</span> 
               </div>
-              <div className="flex flex-1 justify-end gap-8 p-1">
-                 {/* Removed Allocation Amount header - Add placeholder for alignment */}
-                 <span className="w-24 text-right">&nbsp;</span>
-                 <span className="w-20 text-right">APY</span>
+              <div className="flex flex-1 justify-end gap-4 p-1">
+                 <span className="w-24 text-right">Allocation</span>
+                 <span className="w-28 text-right">APY (Total)</span>
+                 <span className="w-24 text-right">APY (Reserve)</span>
+                 <span className="w-24 text-right">APY (Rewards)</span>
               </div>
             </div>
 
             {/* Allocation List Items */} 
-            {allocation.map((item, index) => (
-              <div 
-                key={item.name} 
-                className={`flex items-center transition-colors duration-150`}
-              >
-                <div className="flex items-center gap-2 flex-[2] p-1">
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: item.color }}
-                  />
-                  <span className="text-white">{item.name}</span>
+            {allocation.map((item, index) => {
+              // Helper to format APY (REMOVE * 100)
+              const formatApy = (apy: number | undefined) => 
+                apy !== undefined ? `${apy.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : '-';
+              
+              return (
+                <div 
+                  key={item.name} 
+                  className={`flex items-center transition-colors duration-150 text-sm`}
+                >
+                  <div className="flex items-center gap-2 flex-[2] p-1">
+                    <div
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: item.color }}
+                    />
+                    <span className="text-white">{item.name}</span>
+                  </div>
+                  <div className="flex flex-1 justify-end gap-4 p-1">
+                    <span className="text-white w-24 text-right">
+                      ${item.allocation.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                    <span className="text-[#34D399] w-28 text-right font-semibold">
+                      {formatApy(item.expected_return)}
+                    </span>
+                    <span className="text-gray-400 w-24 text-right">
+                      {formatApy(item.reserve_apy)}
+                    </span>
+                     <span className="text-gray-400 w-24 text-right">
+                      {formatApy(item.rewards_apy)}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex flex-1 justify-end gap-8 p-1">
-                  <span className="text-white w-24 text-right">
-                    ${item.allocation.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                  <span className="text-[#34D399] w-20 text-right">
-                    {item.expected_return.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%
-                  </span>
-                </div>
-              </div>
-            ))}
-            {/* Total Profit / Return section */} 
+              );
+            })}
+            {/* Total Profit / Return section */}
             {distribution && (
-              <div className="pt-4 mt-4 border-t border-[#1E2633]">
+              // Added mt-auto to push totals to the bottom if list is short, but card still shrinks
+              <div className="pt-4 mt-4 border-t border-[#1E2633]"> 
                  <div className="flex items-center">
                   <span className="text-[#34D399] flex-[2]">Total Profit</span>
                   <span className="text-[#34D399] flex-1 text-right">
                     ${distribution.total_profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
-                </div>
-                <div className="flex items-center mt-2">
-                  {/* Changed label to Total APY */}
-                  <span className="text-[#34D399] flex-[2]">Total APY</span>
-                  <span className="text-[#34D399] flex-1 text-right">
-                    {(distribution.total_expected_return * 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%                  </span>
                 </div>
               </div>
             )}
@@ -436,16 +465,15 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
 
                 return (
                   <PoolInfo
-                    key={pool.address}
+                    key={pool.name}
                     title={pool.name || `Pool ${index + 1}`}
-                    address={pool.address}
-                    chain={pool.chain}
-                    // Use a stable color index based on original SAMPLE_POOLS index if possible
-                    // This prevents colors shifting when items are filtered out
-                    color={getInvestmentColor('pool', SAMPLE_POOLS.findIndex(p => p.address === pool.address))}
+                    color={getInvestmentColor('pool', SAMPLE_POOLS.findIndex(p => p.name === pool.name))}
                     data={{
                       allocation: `$${investment.allocation.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-                      expectedReturn: `${(investment.expected_return * 100).toFixed(2)}%`
+                      expectedReturn: investment.expected_return,
+                      expectedProfit: investment.expectedProfit,
+                      reserveApy: investment.reserve_apy,
+                      rewardsApy: investment.rewards_apy
                     }}
                   />
                 );
@@ -471,17 +499,13 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
                   <ReserveInfo
                     key={reserve.name}
                     title={reserve.name}
-                    // Use a stable color index based on original SAMPLE_RESERVES index
                     color={getInvestmentColor('reserve', SAMPLE_RESERVES.findIndex(r => r.name === reserve.name))}
-                    data={{
-                      // Note: ReserveInfo shows general reserve stats, not allocation specific
-                      // If you wanted to show allocated amount here, add it to ReserveInfo props
-                      totalValueLocked: `$${reserve.total_supplied.toLocaleString()}`,
-                      utilizationRate: reserve.total_supplied > 0 
-                        ? `${((reserve.total_borrowed / reserve.total_supplied) * 100).toFixed(1)}%`
-                        : '0.0%',
-                      baseFee: `${(reserve.fee_percentage * 100).toFixed(1)}%`,
-                      baseAPY: `${(reserve.base_variable_borrow_rate * 100).toFixed(2)}%`
+                    investmentData={{
+                      allocation: investment.allocation,
+                      expectedReturn: investment.expected_return, 
+                      expectedProfit: investment.expectedProfit,
+                      reserveApy: investment.reserve_apy, 
+                      rewardsApy: investment.rewards_apy 
                     }}
                   />
                 );
