@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+// Remove unused useState import
+// import { useState } from 'react';
 
 // Define the shape of the data passed to PoolInfo
 interface PoolDisplayData {
