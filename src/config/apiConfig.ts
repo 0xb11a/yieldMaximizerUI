@@ -59,8 +59,8 @@ interface RawApiResponse {
   details: ApiResponseDetail[];
   total_profit: number;
   // Removed specific pool/reserve supply fields (pool1_supply, etc.)
-  // Add index signature to allow dynamic keys like poolX_supply, reserveY_supply
-  [key: string]: any; 
+  // Remove index signature
+  // [key: string]: any; 
 }
 
 /**

@@ -1,32 +1,23 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import dynamic from 'next/dynamic';
 import PoolInfo from './PoolInfo';
 import ReserveInfo from './ReserveInfo';
 import { 
   generateApiRequestBody, 
   fetchDistribution, 
-  type Reserve, 
   type ApiResponse,
-  type Investment,
-  DEMO_DATA
 } from '@/config/apiConfig';
 import { SAMPLE_POOLS, SAMPLE_RESERVES } from '@/config/poolsAndReserves';
 import { getInvestmentColor } from '@/styles/colors';
 // Import Recharts components
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, TooltipProps } from 'recharts';
 // Import wagmi hooks
 import { useAccount, useConnect, useDisconnect, useBalance } from 'wagmi';
 import { injected } from 'wagmi/connectors'; // Import the connector
 import { formatEther } from 'viem'; // Import formatEther
-
-
-// Remove dynamic import for PieChart
-// const PieChart = dynamic(
-//   () => import('react-minimal-pie-chart').then((mod) => mod.PieChart),
-//   { ssr: false }
-// );
+// Add NameType and ValueType imports
+import { NameType, ValueType } from 'recharts/types/component/DefaultTooltipContent';
 
 interface AllocationItem {
   name: string;
@@ -41,12 +32,6 @@ interface AllocationItem {
 }
 
 const INITIAL_ALLOCATION: AllocationItem[] = [];
-
-// Remove TooltipData interface
-// interface TooltipData extends AllocationItem {
-//   x: number;
-//   y: number;
-// }
 
 interface InvestmentCalculatorProps {
   useDemo?: boolean;
@@ -206,7 +191,7 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
   // const CustomTooltip = () => { ... };
 
   // Custom Tooltip for BarChart
-  const CustomBarTooltip = ({ active, payload, label }: any) => {
+  const CustomBarTooltip = ({ active, payload, label }: TooltipProps<ValueType, NameType>) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload; // Access the full data item
       const formatApy = (apy: number | undefined) => 
@@ -317,7 +302,7 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
            )}
            {error && (
             <div className="text-red-500 text-sm mt-2">
-              {error} // Show general errors (API errors, balance zero errors, etc.)
+              {error}
             </div>
            )}
         </div>
@@ -364,8 +349,8 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
                 />
                 <Tooltip content={<CustomBarTooltip />} cursor={{ fill: 'rgba(107, 114, 128, 0.1)' }} /> {/* Custom tooltip and hover cursor*/}
                 <Bar dataKey="allocation">
-                  {allocation.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  {allocation.map((entry) => (
+                    <Cell key={`cell-${entry.name}`} fill={entry.color} />
                   ))}
                 </Bar>
               </BarChart>
@@ -392,7 +377,7 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
             </div>
 
             {/* Allocation List Items */} 
-            {allocation.map((item, index) => {
+            {allocation.map((item) => {
               // Helper to format APY (REMOVE * 100)
               const formatApy = (apy: number | undefined) => 
                 apy !== undefined ? `${apy.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : '-';
@@ -457,6 +442,7 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
                 // Keep the pool only if an investment exists and allocation > 0
                 return investment && investment.allocation > 0;
               })
+              // Restore index parameter for use in title
               .map((pool, index) => {
                 // We know the investment exists from the filter above, find it again
                 const investment = distribution.investments.find(
@@ -466,6 +452,7 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
                 return (
                   <PoolInfo
                     key={pool.name}
+                    // Use index for default title
                     title={pool.name || `Pool ${index + 1}`}
                     color={getInvestmentColor('pool', SAMPLE_POOLS.findIndex(p => p.name === pool.name))}
                     data={{
@@ -489,7 +476,8 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
                  // Keep the reserve only if an investment exists and allocation > 0
                 return investment && investment.allocation > 0;
               })
-              .map((reserve, index) => {
+              // Remove unused index parameter
+              .map((reserve) => {
                  // We know the investment exists from the filter above
                 const investment = distribution.investments.find(
                   inv => inv.type === 'reserve' && inv.name === reserve.name
