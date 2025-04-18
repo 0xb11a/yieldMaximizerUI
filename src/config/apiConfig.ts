@@ -156,7 +156,7 @@ export async function fetchDistribution(requestBody: ApiRequestBody): Promise<Ap
       throw new Error('API URL is not configured');
     }
 
-    const response = await fetch(process.env.NEXT_PUBLIC_API_URL, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/optimize-investments`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
