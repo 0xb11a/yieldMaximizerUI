@@ -3,30 +3,34 @@
 // Define the shape of the specific investment data for this reserve
 interface InvestmentAllocationData {
   allocation: number; 
-  expectedReturn: number; 
-  expectedProfit: number;
-  reserveApy?: number;
-  rewardsApy?: number;
+}
+
+// Add reserve-specific data interface
+interface ReserveSpecificData {
+  total_borrowed?: number;
+  total_supplied?: number;
+  optimal_usage_ratio?: number;
 }
 
 interface ReserveInfoProps {
   title: string;
   color: string;
   investmentData: InvestmentAllocationData; // Keep investment-specific data
+  reserveData?: ReserveSpecificData; // Add optional prop for reserve-specific data
 }
 
-export default function ReserveInfo({ title, color, investmentData }: ReserveInfoProps) {
+export default function ReserveInfo({ title, color, investmentData, reserveData }: ReserveInfoProps) {
   // Helper to format APY (same as in PoolInfo)
   const formatApy = (apy: number | undefined) => 
     apy !== undefined ? `${apy.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : 'N/A';
 
-  // Helper to format allocation amount
-  const formatAllocation = (amount: number) => 
-    `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  // Helper to format currency amount
+  const formatCurrency = (amount: number | undefined) => 
+    amount !== undefined ? `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A';
 
-  // Helper to format profit amount (same as in PoolInfo)
-  const formatProfit = (amount: number) => 
-    `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  // Helper to format ratio as percentage
+  const formatRatioPercent = (ratio: number | undefined) =>
+    ratio !== undefined ? `${(ratio * 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : 'N/A';
 
   return (
     <div className="card transform transition-all duration-500 hover:scale-[1.02]">
@@ -39,26 +43,25 @@ export default function ReserveInfo({ title, color, investmentData }: ReserveInf
       <div className="p-6 space-y-2">
         <div className="flex justify-between animate-fadeIn">
           <span className="text-[#9CA3AF]">Allocated Amount</span>
-          <span className="text-white">{formatAllocation(investmentData.allocation)}</span>
+          <span className="text-white">{formatCurrency(investmentData.allocation)}</span>
         </div>
-        <div className="flex justify-between animate-fadeIn">
-          <span className="text-[#9CA3AF]">Expected Profit</span>
-          <span className="text-white">{formatProfit(investmentData.expectedProfit)}</span>
-        </div>
-        <div className="flex justify-between animate-fadeIn">
-          <span className="text-[#9CA3AF]">Total APY</span>
-          <span className="text-[#34D399] font-semibold">{formatApy(investmentData.expectedReturn)}</span>
-        </div>
-        {investmentData.reserveApy !== undefined && (
-          <div className="flex justify-between animate-fadeIn pl-4 mt-1">
-            <span className="text-sm text-gray-400">Reserve APY</span>
-            <span className="text-sm text-gray-300">{formatApy(investmentData.reserveApy)}</span>
+        {/* Display new reserve-specific fields if reserveData exists */}
+        {reserveData?.total_borrowed !== undefined && (
+          <div className="flex justify-between animate-fadeIn mt-1">
+            <span className="text-sm text-[#9CA3AF]">Total Borrowed</span>
+            <span className="text-sm text-white">{formatCurrency(reserveData.total_borrowed)}</span>
           </div>
         )}
-        {investmentData.rewardsApy !== undefined && (
-          <div className="flex justify-between animate-fadeIn pl-4 mt-1">
-            <span className="text-sm text-gray-400">Rewards APY</span>
-            <span className="text-sm text-gray-300">{formatApy(investmentData.rewardsApy)}</span>
+        {reserveData?.total_supplied !== undefined && (
+          <div className="flex justify-between animate-fadeIn mt-1">
+            <span className="text-sm text-[#9CA3AF]">Total Supplied</span>
+            <span className="text-sm text-white">{formatCurrency(reserveData.total_supplied)}</span>
+          </div>
+        )}
+        {reserveData?.optimal_usage_ratio !== undefined && (
+          <div className="flex justify-between animate-fadeIn mt-1">
+            <span className="text-sm text-[#9CA3AF]">Optimal Usage Ratio</span>
+            <span className="text-sm text-white">{formatRatioPercent(reserveData.optimal_usage_ratio)}</span>
           </div>
         )}
       </div>

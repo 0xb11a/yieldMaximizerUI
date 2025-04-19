@@ -3,10 +3,10 @@ import { Pool, Reserve } from './apiConfig';
 export const SAMPLE_POOLS: Pool[] = [
   {
     name: "USDC/USDT_MM",
-    daily_fee: 41.64,
-    pool_distribution: 473625,
+    daily_fee: 41.09,
+    pool_distribution: 408788,
     protocol_fee: 0,
-    reward_per_day: 5127,
+    reward_per_day: 5124,
     reward_token_price: 0.02535
   }
 ];
@@ -20,7 +20,7 @@ export const SAMPLE_RESERVES: Reserve[] = [
     variable_rate_slope1: 0.08,
     variable_rate_slope2: 0.8,
     token_price: 1,
-    fee_percentage: 0.08,
+    fee_percentage: 0.3,
     base_variable_borrow_rate: 0
   },
   {
