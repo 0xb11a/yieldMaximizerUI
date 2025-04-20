@@ -11,10 +11,7 @@ COPY package.json package-lock.json ./
 # Install dependencies
 RUN npm ci
 
-# Rebuild the source code only when needed
-# FROM base AS builder
-# WORKDIR /app
-# COPY --from=deps /app/node_modules ./node_modules
+# COPY .env ./ || touch .env
 COPY . .
 
 # Next.js collects completely anonymous telemetry data about general usage.
