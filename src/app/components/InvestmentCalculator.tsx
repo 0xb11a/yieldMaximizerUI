@@ -168,7 +168,7 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
       let errorMessage = 'An unexpected error occurred';
       if (err instanceof Error) {
         if (err.message.includes('Failed to fetch') || err instanceof TypeError) { 
-           errorMessage = 'Unable to connect to the server.';
+           errorMessage = 'Unable to connect to the server.' + process.env.NEXT_PUBLIC_API_URL;
         } else {
            errorMessage = 'An error occurred while fetching data from the server.';
         }
