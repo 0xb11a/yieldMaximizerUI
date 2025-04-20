@@ -64,11 +64,14 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
   // State to track client-side mounting
   const [isClient, setIsClient] = useState(false);
 
-  // Get demo funds from environment variable with fallback
-  const demoFundsEnv = process.env.NEXT_PUBLIC_DEMO_FUNDS;
-  const DEMO_TOTAL_FUNDS = demoFundsEnv && !isNaN(parseFloat(demoFundsEnv)) 
-                           ? parseFloat(demoFundsEnv) 
-                           : 500000; // Fallback value
+  // Get initial demo funds from environment variable with fallback
+  // const initialDemoFundsEnv = process.env.NEXT_PUBLIC_DEMO_FUNDS;
+  // const INITIAL_DEMO_TOTAL_FUNDS = initialDemoFundsEnv && !isNaN(parseFloat(initialDemoFundsEnv)) 
+  //                          ? parseFloat(initialDemoFundsEnv) 
+  //                          : 500000; // Fallback value
+
+  // State for dynamic demo funds - Initialize with a default value
+  const [demoFundsAmount, setDemoFundsAmount] = useState<number>(10000); // Default to 10000
 
   // Processes API response into formatted allocation data
   const calculateDistribution = (apiResponse: ApiResponse): AllocationItem[] => {
@@ -117,8 +120,8 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
     let totalFundsForCalc: number;
 
     if (useDemo) {
-      // Demo Mode Logic
-      totalFundsForCalc = DEMO_TOTAL_FUNDS; // Use value from env/fallback
+      // Demo Mode Logic - Use state variable
+      totalFundsForCalc = demoFundsAmount; // Use value from state
       console.log(`Running in Demo Mode with ${totalFundsForCalc} funds`);
       requestBody = generateApiRequestBody(
         SAMPLE_RESERVES,
@@ -273,6 +276,26 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
               }
             </button>
           </div>
+          {/* Demo Funds Input - Show only in demo mode */}
+          {isClient && useDemo && (
+            <div className="mt-4">
+              <label htmlFor="demoFundsInput" className="block text-sm font-medium text-[#9CA3AF] mb-1">
+                Set Demo Funds Amount ($)
+              </label>
+              <input
+                type="number"
+                id="demoFundsInput"
+                value={demoFundsAmount.toString()}
+                onChange={(e) => {
+                  const value = parseFloat(e.target.value);
+                  setDemoFundsAmount(isNaN(value) || value < 0 ? 0 : value);
+                }}
+                className="w-full px-3 py-2 bg-[#111827] border border-[#374151] rounded-md text-white focus:outline-none focus:ring-1 focus:ring-[#10B981] focus:border-[#10B981]"
+                placeholder="Enter demo funds amount"
+                min="0" // Optional: prevent negative values
+              />
+            </div>
+          )}
           {/* Show Distribute button logic - simplified for demo mode */}
           {isClient && (useDemo || isConnected) && ( // Show if demo OR connected
             <button
@@ -322,7 +345,7 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
                Your Supply:&nbsp;
                <span className="font-semibold">
                 {useDemo 
-                 ? `$${(DEMO_TOTAL_FUNDS).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Demo)`
+                 ? `$${(demoFundsAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Demo)`
                  : isBalanceLoading 
                  ? 'Loading...' 
                  : isBalanceError 
@@ -449,6 +472,9 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
                   inv => inv.type === 'pool' && inv.name === pool.name 
                 )!; // Add non-null assertion as we filtered already
 
+                // Find the original pool data from SAMPLE_POOLS
+                const originalPoolData = SAMPLE_POOLS.find(p => p.name === investment.name);
+
                 return (
                   <PoolInfo
                     key={pool.name}
@@ -457,10 +483,10 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
                     color={getInvestmentColor('pool', SAMPLE_POOLS.findIndex(p => p.name === pool.name))}
                     data={{
                       allocation: `$${investment.allocation.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-                      expectedReturn: investment.expected_return,
-                      expectedProfit: investment.expectedProfit,
-                      reserveApy: investment.reserve_apy,
-                      rewardsApy: investment.rewards_apy
+                      // Pass pool-specific fields FROM originalPoolData
+                      daily_fee: originalPoolData?.daily_fee,
+                      pool_distribution: originalPoolData?.pool_distribution,
+                      reward_per_day: originalPoolData?.reward_per_day,
                     }}
                   />
                 );
@@ -483,6 +509,9 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
                   inv => inv.type === 'reserve' && inv.name === reserve.name
                 )!;
 
+                // Find the original reserve data from SAMPLE_RESERVES
+                const originalReserveData = SAMPLE_RESERVES.find(r => r.name === investment.name);
+
                 return (
                   <ReserveInfo
                     key={reserve.name}
@@ -490,10 +519,12 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
                     color={getInvestmentColor('reserve', SAMPLE_RESERVES.findIndex(r => r.name === reserve.name))}
                     investmentData={{
                       allocation: investment.allocation,
-                      expectedReturn: investment.expected_return, 
-                      expectedProfit: investment.expectedProfit,
-                      reserveApy: investment.reserve_apy, 
-                      rewardsApy: investment.rewards_apy 
+                    }}
+                    // Pass reserve-specific fields FROM originalReserveData
+                    reserveData={{
+                      total_borrowed: originalReserveData?.total_borrowed,
+                      total_supplied: originalReserveData?.total_supplied,
+                      optimal_usage_ratio: originalReserveData?.optimal_usage_ratio
                     }}
                   />
                 );

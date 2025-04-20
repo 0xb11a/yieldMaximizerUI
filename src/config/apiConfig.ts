@@ -84,6 +84,14 @@ export interface Investment {
   reserve_apy?: number;   // Optional: APY from reserve interest/fees
   rewards_apy?: number;   // Optional: APY from rewards
   type: 'pool' | 'reserve'; // Investment type
+
+  // Add new optional fields from user request - REMOVED as they come from SAMPLE data now
+  // daily_fee?: number; // For pools
+  // pool_distribution?: number; // For pools
+  // reward_per_day?: number; // For pools
+  // total_borrowed?: number; // For reserves
+  // total_supplied?: number; // For reserves
+  // optimal_usage_ratio?: number; // For reserves
 }
 
 /**
