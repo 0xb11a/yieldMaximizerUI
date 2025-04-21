@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import PoolInfo from './PoolInfo';
 import ReserveInfo from './ReserveInfo';
 import {
-  generateAllocationRequestBody,
   fetchOptimalAllocation,
   fetchPoolAndReserveData,
   type ApiResponse,
@@ -616,9 +615,6 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
                     key={investment.name}
                     title={investment.name} // Use name from investment
                     color={getInvestmentColor('reserve', originalIndex)}
-                    investmentData={{
-                      allocation: investment.allocation, // Pass number directly if needed by component
-                    }}
                     // Pass reserve-specific fields from originalReserveData
                     reserveData={{
                       total_borrowed: originalReserveData.total_borrowed,

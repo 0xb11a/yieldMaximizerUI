@@ -1,10 +1,5 @@
 'use client';
 
-// Define the shape of the specific investment data for this reserve
-interface InvestmentAllocationData {
-  allocation: number; 
-}
-
 // Add reserve-specific data interface
 interface ReserveSpecificData {
   total_borrowed?: number;
@@ -15,22 +10,13 @@ interface ReserveSpecificData {
 interface ReserveInfoProps {
   title: string;
   color: string;
-  investmentData: InvestmentAllocationData; // Keep investment-specific data
   reserveData?: ReserveSpecificData; // Add optional prop for reserve-specific data
 }
 
-export default function ReserveInfo({ title, color, investmentData, reserveData }: ReserveInfoProps) {
-  // Helper to format APY (same as in PoolInfo)
-  const formatApy = (apy: number | undefined) => 
-    apy !== undefined ? `${apy.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : 'N/A';
-
+export default function ReserveInfo({ title, color, reserveData }: ReserveInfoProps) {
   // Helper to format currency amount
   const formatCurrency = (amount: number | undefined) => 
     amount !== undefined ? `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A';
-
-  // Helper to format ratio as percentage
-  const formatRatioPercent = (ratio: number | undefined) =>
-    ratio !== undefined ? `${(ratio * 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : 'N/A';
 
   // Calculate Utilization Rate
   const utilizationRate = 
