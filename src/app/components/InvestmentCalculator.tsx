@@ -3,12 +3,15 @@
 import { useState, useEffect } from 'react';
 import PoolInfo from './PoolInfo';
 import ReserveInfo from './ReserveInfo';
-import { 
-  generateApiRequestBody, 
-  fetchDistribution, 
+import {
+  generateAllocationRequestBody,
+  fetchOptimalAllocation,
+  fetchPoolAndReserveData,
   type ApiResponse,
+  type Pool,
+  type Reserve,
+  type Investment
 } from '@/config/apiConfig';
-import { SAMPLE_POOLS, SAMPLE_RESERVES } from '@/config/poolsAndReserves';
 import { getInvestmentColor } from '@/styles/colors';
 // Import Recharts components
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, TooltipProps } from 'recharts';
@@ -29,6 +32,9 @@ interface AllocationItem {
   expectedProfit: number;  // Added profit specific to this allocation
   reserve_apy?: number;   // APY from reserve/fees
   rewards_apy?: number;   // APY from rewards
+  total_apr?: number;     // Added field to match Investment type
+  base_apr?: number;      // Added
+  rewards_apr?: number;   // Added
 }
 
 const INITIAL_ALLOCATION: AllocationItem[] = [];
@@ -73,37 +79,42 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
   // State for dynamic demo funds - Initialize with a default value
   const [demoFundsAmount, setDemoFundsAmount] = useState<number>(10000); // Default to 10000
 
+  // State to hold fetched pool and reserve data
+  const [fetchedPools, setFetchedPools] = useState<Pool[]>([]);
+  const [fetchedReserves, setFetchedReserves] = useState<Reserve[]>([]);
+
   // Processes API response into formatted allocation data
   const calculateDistribution = (apiResponse: ApiResponse): AllocationItem[] => {
-    const pools = apiResponse.investments.filter(inv => inv.type === 'pool');
-    const reserves = apiResponse.investments.filter(inv => inv.type === 'reserve');
+    const investments = apiResponse.investments;
     const validTotalFunds = apiResponse.total_funds > 0 ? apiResponse.total_funds : 1;
 
-    const calculatedAllocation: AllocationItem[] = [
-      ...pools.map((investment, index) => ({
+    // Find the original index in the fetched data for color mapping
+    const findOriginalIndex = (name: string, type: 'pool' | 'reserve'): number => {
+      if (type === 'pool') {
+        return fetchedPools.findIndex(p => p.name === name);
+      } else {
+        return fetchedReserves.findIndex(r => r.name === name);
+      }
+    };
+
+    const calculatedAllocation: AllocationItem[] = investments
+      .filter(investment => investment.allocation > 0)
+      .map((investment) => ({
         name: investment.name,
         percentage: parseFloat(((investment.allocation / validTotalFunds) * 100).toFixed(2)),
-        color: getInvestmentColor('pool', index),
+        color: getInvestmentColor(investment.type, findOriginalIndex(investment.name, investment.type)),
         type: investment.type,
         expected_return: investment.expected_return,
         allocation: investment.allocation,
-        expectedProfit: investment.expectedProfit, // Copy profit
+        expectedProfit: investment.expectedProfit,
         reserve_apy: investment.reserve_apy,
-        rewards_apy: investment.rewards_apy
-      })),
-      ...reserves.map((investment, index) => ({
-        name: investment.name,
-        percentage: parseFloat(((investment.allocation / validTotalFunds) * 100).toFixed(2)),
-        color: getInvestmentColor('reserve', index),
-        type: investment.type,
-        expected_return: investment.expected_return,
-        allocation: investment.allocation,
-        expectedProfit: investment.expectedProfit, // Copy profit
-        reserve_apy: investment.reserve_apy,
-        rewards_apy: investment.rewards_apy
-      }))
-    ];
-    return calculatedAllocation.filter(item => item.allocation > 0);
+        rewards_apy: investment.rewards_apy,
+        total_apr: investment.total_apr,
+        base_apr: investment.base_apr,
+        rewards_apr: investment.rewards_apr
+      }));
+
+    return calculatedAllocation;
   };
 
   // useEffect to set isClient to true after mounting
@@ -111,87 +122,106 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
     setIsClient(true);
   }, []);
 
-  // Updated handleDistribute
+  // Updated handleDistribute - Two-step fetch process
   const handleDistribute = async () => {
     setIsLoading(true);
     setError(null);
+    setDistribution(null); // Reset previous results
+    setAllocation(INITIAL_ALLOCATION);
+    setFetchedPools([]);
+    setFetchedReserves([]);
+    setIsDistributed(false);
 
-    let requestBody;
     let totalFundsForCalc: number;
+    let walletAddressToUse: string;
 
+    // Determine total funds and wallet address
     if (useDemo) {
-      // Demo Mode Logic - Use state variable
-      totalFundsForCalc = demoFundsAmount; // Use value from state
+      totalFundsForCalc = demoFundsAmount;
+      // Use a placeholder/demo wallet address for fetching pool/reserve data
+      walletAddressToUse = process.env.NEXT_PUBLIC_DEMO_WALLET_ADDRESS || "0x0000000000000000000000000000000000000000"; 
       console.log(`Running in Demo Mode with ${totalFundsForCalc} funds`);
-      requestBody = generateApiRequestBody(
-        SAMPLE_RESERVES,
-        totalFundsForCalc, 
-        SAMPLE_POOLS
-      );
     } else {
-      // Real Mode Logic
-      // Check if balance is loaded and valid
-      if (!balanceData || isBalanceLoading || isBalanceError) {
-        setError('Could not fetch wallet balance or balance is zero.'); 
-        console.error('Balance Error or Loading:', { balanceData, isBalanceLoading, isBalanceError });
-        setIsLoading(false); // Stop loading
-        return; // Don't proceed if balance isn't ready
+      if (!isConnected || !address) {
+          setError('Please connect your wallet first.');
+          setIsLoading(false);
+          return;
       }
+      walletAddressToUse = address;
 
-      // Convert balance from wei (BigInt) to Ether (number)
+      if (!balanceData || isBalanceLoading || isBalanceError) {
+        setError('Could not fetch wallet balance or balance is zero.');
+        console.error('Balance Error or Loading:', { balanceData, isBalanceLoading, isBalanceError });
+        setIsLoading(false);
+        return;
+      }
       totalFundsForCalc = parseFloat(formatEther(balanceData.value));
-      
-      // Check if balance is greater than zero
       if (totalFundsForCalc <= 0) {
          setError('Wallet balance is zero. Please add funds.');
-         setIsLoading(false); // Stop loading
-         return; // Don't proceed with zero balance
+         setIsLoading(false);
+         return;
       }
-      
-      requestBody = generateApiRequestBody(
-        SAMPLE_RESERVES,
-        totalFundsForCalc, 
-        SAMPLE_POOLS
-      );
     }
 
-    // Common logic for both demo and real mode
     try {
-      const data = await fetchDistribution(requestBody);
-      const newAllocation = calculateDistribution(data);
+      // Step 1: Fetch Pool and Reserve Data
+      console.log('Fetching pool and reserve data for address:', walletAddressToUse);
+      const poolReserveData = await fetchPoolAndReserveData(walletAddressToUse);
+      // Added console log for fetchPoolAndReserveData response
+      console.log('<<< Raw Response from fetchPoolAndReserveData >>>:', poolReserveData);
+      setFetchedPools(poolReserveData.pools);
+      setFetchedReserves(poolReserveData.reserves);
+      console.log('Fetched Pools:', poolReserveData.pools);
+      console.log('Fetched Reserves:', poolReserveData.reserves);
+
+      // Check if pools or reserves are empty after fetching
+      if (poolReserveData.pools.length === 0 && poolReserveData.reserves.length === 0) {
+          setError('No pools or reserves found for this configuration.');
+          setIsLoading(false);
+          return;
+      }
+
+      // Step 2: Fetch Optimal Allocation using data from Step 1
+      console.log('Fetching optimal allocation with total funds:', totalFundsForCalc);
+      // Using the renamed function fetchOptimalAllocation
+      const allocationData = await fetchOptimalAllocation(
+          totalFundsForCalc,
+          poolReserveData.pools, 
+          poolReserveData.reserves,
+          1 // Example: Set min_allocation_percent to 1%, make this configurable if needed
+      );
+      // Added console log for fetchOptimalAllocation response
+      console.log('<<< Raw Response from fetchOptimalAllocation >>>:', allocationData);
       
-      setDistribution(data);
+      const newAllocation = calculateDistribution(allocationData);
+      
+      setDistribution(allocationData);
       setAllocation(newAllocation);
       setIsDistributed(true);
+
     } catch (err) {
-      // Error handling remains the same
-      let errorMessage = 'An unexpected error occurred';
+      let errorMessage = 'An unexpected error occurred during distribution';
       if (err instanceof Error) {
+
         if (err.message.includes('Failed to fetch') || err instanceof TypeError) { 
            errorMessage = 'Unable to connect to the server.' + process.env.NEXT_PUBLIC_API_URL;
         } else {
            errorMessage = 'An error occurred while fetching data from the server.';
         }
+
       } 
       setError(errorMessage);
-      console.error('Distribution Error:', err);
-      setAllocation(INITIAL_ALLOCATION); 
+      console.error('Distribution Process Error:', err);
+      // Keep state cleared
       setDistribution(null);
+      setAllocation(INITIAL_ALLOCATION);
+      setFetchedPools([]);
+      setFetchedReserves([]);
       setIsDistributed(false);
     } finally {
       setIsLoading(false);
     }
   };
-
-  // Remove PieChart data transformation
-  // const pieData = allocation.map((item) => ({
-  //     title: item.name,
-  //     value: item.percentage,
-  //     color: item.color,
-  // }));
-
-  // Remove CustomTooltip component for PieChart
-  // const CustomTooltip = () => { ... };
 
   // Custom Tooltip for BarChart
   const CustomBarTooltip = ({ active, payload, label }: TooltipProps<ValueType, NameType>) => {
@@ -234,8 +264,58 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
   };
 
   return (
-    // Remove relative positioning unless needed for other elements
-    <div className="container mx-auto px-8 py-12">
+    <div className="container mx-auto px-4 sm:px-8 py-12">
+       {/* Add some basic CSS for the tooltip */}
+       <style>{`
+        .tooltip-container {
+          position: relative;
+          display: inline-block; /* Or block, depending on layout */
+        }
+        .tooltip-content {
+          visibility: hidden;
+          width: 160px;
+          background-color: #2d3748; /* gray-800 */
+          color: #fff;
+          text-align: left;
+          border-radius: 6px;
+          padding: 8px;
+          position: absolute;
+          z-index: 10;
+          bottom: 125%; /* Position above the element */
+          left: 50%;
+          margin-left: -80px; /* Center the tooltip */
+          opacity: 0;
+          transition: opacity 0.2s;
+          font-size: 0.75rem; /* text-xs */
+          box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .tooltip-content::after { /* Optional: Arrow */
+          content: "";
+          position: absolute;
+          top: 100%;
+          left: 50%;
+          margin-left: -5px;
+          border-width: 5px;
+          border-style: solid;
+          border-color: #2d3748 transparent transparent transparent;
+        }
+        .tooltip-container:hover .tooltip-content {
+          visibility: visible;
+          opacity: 1;
+        }
+        .tooltip-row {
+          display: flex;
+          justify-content: space-between;
+          margin-bottom: 4px; /* Spacing between rows */
+        }
+        .tooltip-label {
+          color: #9ca3af; /* gray-400 */
+        }
+        .tooltip-value {
+          font-weight: 600; /* semibold */
+        }
+       `}</style>
+
       {/* Remove old tooltip */}
       {/* <CustomTooltip /> */}
       <h1 className="text-3xl font-bold mb-8">Yield Maximizer</h1>
@@ -247,7 +327,6 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
             <div>
               <h2 className="text-xl font-semibold mb-2">Wallet Connection</h2>
               <p className="text-[#9CA3AF]">
-                {/* Render placeholder text until component has mounted */}
                 {!isClient ? 'Loading...' : 
                   isConnecting ? 'Connecting...' : 
                   isConnected ? `Connected: ${address?.slice(0, 6)}...${address?.slice(-4)}` : 
@@ -268,7 +347,6 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
               disabled={!isClient || isConnecting} 
               className="px-6 py-3 bg-[#1E2633] hover:bg-[#2D3748] text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait"
             >
-              {/* Render placeholder text until component has mounted */}
               {!isClient ? 'Loading...' : 
                  isConnecting ? 'Connecting...' : 
                  isConnected ? 'Disconnect' : 
@@ -296,24 +374,26 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
               />
             </div>
           )}
-          {/* Show Distribute button logic - simplified for demo mode */}
-          {isClient && (useDemo || isConnected) && ( // Show if demo OR connected
+          {/* Show Distribute button logic */}
+          {isClient && (useDemo || isConnected) && (
             <button
               onClick={handleDistribute}
-              // Disable logic: Disable if API is loading. If not demo, also disable if balance is loading/error/zero
-              disabled={isLoading || (!useDemo && (isBalanceLoading || isBalanceError || !balanceData || parseFloat(formatEther(balanceData.value)) <= 0))}
-              className={`w-full px-6 py-3 bg-[#10B981] hover:bg-[#059669] text-white rounded-lg transition-colors ${
-                (isLoading || (!useDemo && (isBalanceLoading || isBalanceError || !balanceData || parseFloat(formatEther(balanceData.value)) <= 0)))
+              // Updated disable logic
+              disabled={isLoading || (!useDemo && (!isConnected || isBalanceLoading || isBalanceError))}
+              className={`w-full px-6 py-3 bg-[#10B981] hover:bg-[#059669] text-white rounded-lg transition-colors ${ 
+                (isLoading || (!useDemo && (!isConnected || isBalanceLoading || isBalanceError))) 
                  ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
               {isLoading 
                 ? 'Calculating Distribution...' 
-                : (!useDemo && isBalanceLoading) // Show balance loading only in non-demo mode
+                : (!useDemo && !isConnected) 
+                ? 'Connect Wallet to Distribute'
+                : (!useDemo && isBalanceLoading) 
                 ? 'Fetching Balance...' 
-                : (!useDemo && isBalanceError) // Show balance error only in non-demo mode
+                : (!useDemo && isBalanceError) 
                 ? 'Balance Error'
-                : `Distribute ${useDemo ? 'Demo ' : ''}Funds` // Add 'Demo' text if applicable
+                : `Distribute ${useDemo ? 'Demo ' : ''}Funds`
               }
             </button>
            )}
@@ -332,8 +412,7 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
       </div>
 
       {/* Distribution and Allocation Section - Conditional rendering also checks isClient */}
-      <div className={`grid grid-cols-1 md:grid-cols-2 gap-8 transition-opacity duration-500 ${
-        // Show if distributed AND (demo OR connected AND client mounted)
+      <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-8 transition-opacity duration-500 ${
         isDistributed && (useDemo || (isClient && isConnected)) && allocation.length > 0 ? 'opacity-100' : 'opacity-0 h-0 overflow-hidden'
       }`}>
         {/* Distribution Chart -> Now BarChart */}
@@ -381,62 +460,104 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
           </div>
         </div>
 
-        {/* Allocation List (remove hover effect tied to PieChart) */}
-        <div className="card p-8 flex flex-col"> 
+        {/* Allocation List (Vertical Mobile/Tablet Layout up to lg) */}
+        <div className="card p-4 sm:p-8 flex flex-col">
           <h2 className="text-xl font-semibold mb-2">Allocation</h2>
-          {/* Remove flex-grow from this div */}
-          <div className="space-y-2"> 
-            {/* Allocation List Headers - Add APY Breakdown */}
-            <div className="flex items-center text-xs text-[#9CA3AF] font-semibold mb-2">
-              <div className="flex items-center gap-2 flex-[2] p-1">
+          {/* Use lg:space-y-2 for desktop spacing */} 
+          <div className="space-y-1 lg:space-y-2">
+            {/* Allocation List Headers - Hidden below lg, specific widths lg+ */}
+            <div className="hidden lg:flex items-center text-xs text-[#9CA3AF] font-semibold mb-2">
+              <div className="flex-[2] p-1">
                  <span>Asset</span> 
               </div>
-              <div className="flex flex-1 justify-end gap-4 p-1">
-                 <span className="w-24 text-right">Allocation</span>
-                 <span className="w-28 text-right">APY (Total)</span>
-                 <span className="w-24 text-right">APY (Reserve)</span>
-                 <span className="w-24 text-right">APY (Rewards)</span>
+              {/* Apply widths from lg+, adjust gap */}
+              {/* Reduced gap slightly */} 
+              <div className="flex flex-1 justify-end gap-2 lg:gap-3 p-1">
+                 <span className="w-24 text-right">Allocation ($)</span>
+                 <span className="w-16 text-right">Total APR</span> 
+                 <span className="w-16 text-right">Total APY</span>
+                 <span className="w-24 text-right">Profit ($)</span> 
               </div>
             </div>
 
-            {/* Allocation List Items */} 
+            {/* Allocation List Items - Vertical layout below lg */}
             {allocation.map((item) => {
-              // Helper to format APY (REMOVE * 100)
-              const formatApy = (apy: number | undefined) => 
-                apy !== undefined ? `${apy.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : '-';
+              const formatPercent = (value: number | undefined) => 
+                value !== undefined ? `${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : '-';
+              const formatCurrency = (value: number | undefined) => 
+                value !== undefined ? `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-';
               
               return (
-                <div 
-                  key={item.name} 
-                  className={`flex items-center transition-colors duration-150 text-sm`}
-                >
-                  <div className="flex items-center gap-2 flex-[2] p-1">
-                    <div
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: item.color }}
-                    />
-                    <span className="text-white">{item.name}</span>
+                // Vertical stack below lg, horizontal row lg+
+                <div key={item.name} className={`flex flex-col lg:flex-row lg:items-center transition-colors duration-150 text-sm py-2 border-b border-gray-800 lg:border-none`}>
+                  {/* Asset Name - Full width below lg */} 
+                  <div className="flex items-center gap-2 p-1 mb-1 lg:mb-0 lg:flex-[2]">
+                    <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }}/>
+                    <span className="text-white font-medium break-words">{item.name}</span> 
                   </div>
-                  <div className="flex flex-1 justify-end gap-4 p-1">
-                    <span className="text-white w-24 text-right">
-                      ${item.allocation.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
-                    <span className="text-[#34D399] w-28 text-right font-semibold">
-                      {formatApy(item.expected_return)}
-                    </span>
-                    <span className="text-gray-400 w-24 text-right">
-                      {formatApy(item.reserve_apy)}
-                    </span>
-                     <span className="text-gray-400 w-24 text-right">
-                      {formatApy(item.rewards_apy)}
-                    </span>
+                  
+                  {/* Data - Mobile/Tablet View (below lg) - Stacked */} 
+                  <div className="block lg:hidden pl-5 space-y-1 text-xs">
+                     <div className="flex justify-between">
+                        <span className='text-[#9CA3AF]'>Allocation:</span>
+                        <span className="text-white font-medium">{formatCurrency(item.allocation)}</span>
+                     </div>
+                      <div className="flex justify-between">
+                        <span className='text-[#9CA3AF]'>Total APY:</span>
+                        <span className="text-[#34D399] font-semibold">
+                           {formatPercent(item.expected_return)} 
+                        </span>
+                     </div>
+                  </div>
+
+                  {/* Data - Desktop View (lg+) - Horizontal Row */} 
+                  <div className="hidden lg:flex flex-1 justify-end gap-2 lg:gap-3 p-1">
+                     {/* Allocated Amount */}
+                     <div className="w-24 text-right">
+                        <span className="text-white">{formatCurrency(item.allocation)}</span>
+                     </div>
+                     {/* Total APR */} 
+                     <div className="tooltip-container w-16 text-right">
+                        <span className="text-gray-400">
+                          {formatPercent(item.total_apr)} 
+                        </span>
+                        <div className="tooltip-content">
+                           <div className="tooltip-row">
+                             <span className="tooltip-label">Base APR</span>
+                             <span className="tooltip-value">{formatPercent(item.base_apr)}</span>
+                           </div>
+                           <div className="tooltip-row">
+                             <span className="tooltip-label">Rewards APR</span>
+                             <span className="tooltip-value">{formatPercent(item.rewards_apr)}</span>
+                           </div>
+                        </div>
+                     </div>
+                     {/* Total APY */} 
+                     <div className="tooltip-container w-16 text-right">
+                        <span className="text-[#34D399] font-semibold">
+                           {formatPercent(item.expected_return)} 
+                        </span>
+                       <div className="tooltip-content">
+                         <div className="tooltip-row">
+                           <span className="tooltip-label">Base APY</span>
+                           <span className="tooltip-value">{formatPercent(item.reserve_apy)}</span>
+                         </div>
+                         <div className="tooltip-row">
+                           <span className="tooltip-label">Rewards APY</span>
+                           <span className="tooltip-value">{formatPercent(item.rewards_apy)}</span>
+                         </div>
+                      </div>
+                     </div>
+                     {/* Expected Profit */} 
+                      <div className="w-24 text-right">
+                        <span className="text-white">{formatCurrency(item.expectedProfit)}</span>
+                     </div>
                   </div>
                 </div>
               );
             })}
-            {/* Total Profit / Return section */}
+            {/* Total Profit Section */}
             {distribution && (
-              // Added mt-auto to push totals to the bottom if list is short, but card still shrinks
               <div className="pt-4 mt-4 border-t border-[#1E2633]"> 
                  <div className="flex items-center">
                   <span className="text-[#34D399] flex-[2]">Total Profit</span>
@@ -450,81 +571,59 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
         </div>
       </div>
 
-      {/* Pool & Reserves Information - Conditional rendering with filtering */}
-      {isDistributed && (useDemo || (isClient && isConnected)) && distribution && (
+      {/* Pool & Reserves Information - Updated Logic */}
+      {isDistributed && (useDemo || (isClient && isConnected)) && distribution && (fetchedPools.length > 0 || fetchedReserves.length > 0) && (
         <>
           <h2 className="text-2xl font-bold mt-12 mb-6">Pools & Reserves Information</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 animate-fadeIn">
-            {/* Filter and map Pools */}
-            {SAMPLE_POOLS
-              .filter(pool => {
-                // Find corresponding investment in the distribution results
-                const investment = distribution.investments.find(
-                  inv => inv.type === 'pool' && inv.name === pool.name 
-                );
-                // Keep the pool only if an investment exists and allocation > 0
-                return investment && investment.allocation > 0;
-              })
-              // Restore index parameter for use in title
-              .map((pool, index) => {
-                // We know the investment exists from the filter above, find it again
-                const investment = distribution.investments.find(
-                  inv => inv.type === 'pool' && inv.name === pool.name 
-                )!; // Add non-null assertion as we filtered already
-
-                // Find the original pool data from SAMPLE_POOLS
-                const originalPoolData = SAMPLE_POOLS.find(p => p.name === investment.name);
+            {/* Map over investments and display corresponding PoolInfo */}  
+            {distribution.investments
+              .filter(inv => inv.type === 'pool' && inv.allocation > 0)
+              .map((investment: Investment) => {
+                const originalPoolData = fetchedPools.find(p => p.name === investment.name);
+                if (!originalPoolData) return null;
+                const originalIndex = fetchedPools.findIndex(p => p.name === investment.name);
 
                 return (
                   <PoolInfo
-                    key={pool.name}
-                    // Use index for default title
-                    title={pool.name || `Pool ${index + 1}`}
-                    color={getInvestmentColor('pool', SAMPLE_POOLS.findIndex(p => p.name === pool.name))}
+                    key={investment.name}
+                    title={investment.name}
+                    color={getInvestmentColor('pool', originalIndex)}
                     data={{
-                      allocation: `$${investment.allocation.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-                      // Pass pool-specific fields FROM originalPoolData
-                      daily_fee: originalPoolData?.daily_fee,
-                      pool_distribution: originalPoolData?.pool_distribution,
-                      reward_per_day: originalPoolData?.reward_per_day,
+                      daily_fee: originalPoolData.daily_fee,
+                      pool_distribution: originalPoolData.pool_distribution,
+                      reward_per_day: originalPoolData.reward_per_day,
+                      reward_token_price: originalPoolData.reward_token_price
                     }}
                   />
                 );
             })}
             
-            {/* Filter and map Reserves */}
-            {SAMPLE_RESERVES
-              .filter(reserve => {
-                 // Find corresponding investment in the distribution results
-                const investment = distribution.investments.find(
-                  inv => inv.type === 'reserve' && inv.name === reserve.name
-                );
-                 // Keep the reserve only if an investment exists and allocation > 0
-                return investment && investment.allocation > 0;
-              })
-              // Remove unused index parameter
-              .map((reserve) => {
-                 // We know the investment exists from the filter above
-                const investment = distribution.investments.find(
-                  inv => inv.type === 'reserve' && inv.name === reserve.name
-                )!;
+            {/* Map over investments and display corresponding ReserveInfo */}  
+            {distribution.investments
+              .filter(inv => inv.type === 'reserve' && inv.allocation > 0)
+              // Added type annotation for inv
+              .map((investment: Investment) => {
+                // Find the full reserve data from the fetched state
+                const originalReserveData = fetchedReserves.find(r => r.name === investment.name);
+                if (!originalReserveData) return null; // Skip if data not found
 
-                // Find the original reserve data from SAMPLE_RESERVES
-                const originalReserveData = SAMPLE_RESERVES.find(r => r.name === investment.name);
+                // Find original index for color
+                const originalIndex = fetchedReserves.findIndex(r => r.name === investment.name);
 
                 return (
                   <ReserveInfo
-                    key={reserve.name}
-                    title={reserve.name}
-                    color={getInvestmentColor('reserve', SAMPLE_RESERVES.findIndex(r => r.name === reserve.name))}
+                    key={investment.name}
+                    title={investment.name} // Use name from investment
+                    color={getInvestmentColor('reserve', originalIndex)}
                     investmentData={{
-                      allocation: investment.allocation,
+                      allocation: investment.allocation, // Pass number directly if needed by component
                     }}
-                    // Pass reserve-specific fields FROM originalReserveData
+                    // Pass reserve-specific fields from originalReserveData
                     reserveData={{
-                      total_borrowed: originalReserveData?.total_borrowed,
-                      total_supplied: originalReserveData?.total_supplied,
-                      optimal_usage_ratio: originalReserveData?.optimal_usage_ratio
+                      total_borrowed: originalReserveData.total_borrowed,
+                      total_supplied: originalReserveData.total_supplied,
+                      optimal_usage_ratio: originalReserveData.optimal_usage_ratio
                     }}
                   />
                 );

@@ -1,17 +1,20 @@
+import { POOL_ADDRESSES, RESERVE_ADDRESSES, PoolAddress, ReserveAddress } from './poolsAndReserves';
+
 /**
  * Represents a lending reserve with its key parameters
  * Used for calculating interest rates and managing liquidity
  */
 export interface Reserve {
-  name: string;                    // Identifier for the reserve
-  total_borrowed: number;          // Total amount borrowed from the reserve
-  total_supplied: number;          // Total liquidity supplied to the reserve
-  optimal_usage_ratio: number;     // Target utilization rate (0-1)
-  variable_rate_slope1: number;    // Interest rate parameter for utilization below optimal
-  variable_rate_slope2: number;    // Interest rate parameter for utilization above optimal
-  token_price: number;             // Current price of the reserve's token
-  fee_percentage: number;          // Fee charged on borrowing (0-1)
-  base_variable_borrow_rate: number; // Minimum borrowing rate
+  name: string;
+  total_borrowed: number;
+  total_supplied: number;
+  optimal_usage_ratio: number;
+  variable_rate_slope1: number;
+  variable_rate_slope2: number;
+  token_price: number;
+  fee_percentage: number;
+  base_variable_borrow_rate: number;
+  reserve_factor?: number; // Optional: Reserve factor (added)
 }
 
 /**
@@ -27,40 +30,43 @@ export interface Pool {
 }
 
 /**
- * Structure for API request payload
- * Contains all necessary data for distribution calculation
+ * Structure for the /calculate-optimal-allocation API request payload
  */
-export interface ApiRequestBody {
-  total_funds: number;  // Total amount to be distributed
-  pools: Pool[];       // Available liquidity pools
-  reserves: Reserve[]; // Available lending reserves
+export interface AllocationRequestBody {
+  total_funds: number;
+  pools: Pool[];
+  reserves: Reserve[];
+  min_allocation_percent?: number; // Optional minimum allocation percentage
 }
 
 /**
- * API response detail item structure
+ * API response detail item structure for /calculate-optimal-allocation
  */
-interface ApiResponseDetail {
+interface AllocationResponseDetail {
   allocated_amount: number;
-  expected_apy: number; // This seems to be the total APY
-  expected_fee_apr?: number; // Keeping this as it might still be used elsewhere or returned sometimes
+  base_apr?: number;
+  base_apy: number; // Non-reward APY
   expected_profit: number;
-  expected_total_apr?: number; // Keeping this as it might still be used elsewhere or returned sometimes
-  expected_reserve_apy?: number; // Added field
-  expected_rewards_apy?: number; // Added field
-  index: number;
+  name: string; // Name is now provided directly
   percentage: number;
+  rewards_apr?: number;
+  rewards_apy: number; // Reward APY
+  total_apr?: number;
+  total_apy: number; // Total APY
   type: 'pool' | 'reserve';
 }
 
 /**
- * Raw API response structure
+ * Raw API response structure for /calculate-optimal-allocation
  */
-interface RawApiResponse {
-  details: ApiResponseDetail[];
+interface AllocationResponseBody {
+  details: AllocationResponseDetail[];
   total_profit: number;
-  // Removed specific pool/reserve supply fields (pool1_supply, etc.)
-  // Remove index signature
-  // [key: string]: any; 
+  // Optional index-based supply fields from example
+  pool1_supply?: number;
+  reserve2_supply?: number;
+  reserve3_supply?: number;
+  // Consider adding index signature if more dynamic fields exist: [key: string]: any;
 }
 
 /**
@@ -69,102 +75,54 @@ interface RawApiResponse {
 export interface ApiResponse {
   investments: Investment[];      // Individual allocations
   total_profit: number;          // Expected total profit
-  total_expected_return: number; // Overall expected APY
+  total_expected_return: number; // Overall expected APY (calculated from total_profit / total_funds)
   total_funds: number;           // Total amount distributed
 }
 
 /**
- * Represents a single investment allocation
+ * Represents a single investment allocation (updated)
  */
 export interface Investment {
-  name: string;           // Identifier of the pool or reserve
-  allocation: number;     // Amount allocated
-  expected_return: number; // Predicted TOTAL APY (from expected_apy)
-  expectedProfit: number;  // Profit specific to this investment
-  reserve_apy?: number;   // Optional: APY from reserve interest/fees
-  rewards_apy?: number;   // Optional: APY from rewards
-  type: 'pool' | 'reserve'; // Investment type
-
-  // Add new optional fields from user request - REMOVED as they come from SAMPLE data now
-  // daily_fee?: number; // For pools
-  // pool_distribution?: number; // For pools
-  // reward_per_day?: number; // For pools
-  // total_borrowed?: number; // For reserves
-  // total_supplied?: number; // For reserves
-  // optimal_usage_ratio?: number; // For reserves
+  name: string;
+  allocation: number;
+  expected_return: number; // Mapped from total_apy
+  expectedProfit: number;
+  reserve_apy?: number;   // Mapped from base_apy
+  rewards_apy?: number;   // Mapped from rewards_apy
+  total_apr?: number;
+  base_apr?: number;      // Added: Mapped from base_apr
+  rewards_apr?: number;   // Added: Mapped from rewards_apr
+  type: 'pool' | 'reserve';
 }
 
-/**
- * Mock data for development and testing
- * Follows the same structure as actual API response
- */
-export const DEMO_DATA: ApiResponse = {
-  investments: [
-    {
-      name: "Pool-7ccd8a76",
-      allocation: 35000,
-      expected_return: 0.0546,
-      expectedProfit: 35000 * 0.0546,
-      type: "pool"
-    },
-    {
-      name: "Pool-9876abcd",
-      allocation: 25000,
-      expected_return: 0.0482,
-      expectedProfit: 25000 * 0.0482,
-      type: "pool"
-    },
-    {
-      name: "USDC Reserve",
-      allocation: 28000,
-      expected_return: 0.0418,
-      expectedProfit: 28000 * 0.0418,
-      type: "reserve"
-    },
-    {
-      name: "ETH Reserve",
-      allocation: 12000,
-      expected_return: 0.0362,
-      expectedProfit: 12000 * 0.0362,
-      type: "reserve"
-    }
-  ],
-  total_profit: 5423.4,
-  total_expected_return: 0.05423,
-  total_funds: 800000
-};
+// Added interfaces for /fetch-pool-data endpoint
+interface FetchDataRequestBody {
+  wallet_address: string;
+  funds: (PoolAddress | ReserveAddress)[];
+}
 
-/**
- * Generates the request body for the distribution API
- * @param reserves - Array of available lending reserves
- * @param totalFunds - Total amount to be distributed
- * @param pools - Array of available liquidity pools
- * @returns Formatted request body for API
- */
-export function generateApiRequestBody(reserves: Reserve[], totalFunds: number, pools: Pool[]): ApiRequestBody {
-  return {
-    total_funds: totalFunds,
-    pools: pools,
-    reserves: reserves
+interface FetchDataResponseBody {
+  pools: Pool[];
+  reserves: Reserve[];
+}
+
+// Added function to fetch pool and reserve data
+export async function fetchPoolAndReserveData(walletAddress: string): Promise<FetchDataResponseBody> {
+  if (!process.env.NEXT_PUBLIC_API_URL) {
+    throw new Error('API URL is not configured');
+  }
+  const apiUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/fetch-pool-data`;
+
+  const funds = [...POOL_ADDRESSES, ...RESERVE_ADDRESSES];
+  const requestBody: FetchDataRequestBody = {
+    wallet_address: walletAddress,
+    funds: funds
   };
-}
 
-/**
- * Fetches optimal distribution from the API
- * @param requestBody - Formatted request data
- * @returns Promise resolving to distribution results
- * @throws Error if API request fails
- */
-export async function fetchDistribution(requestBody: ApiRequestBody): Promise<ApiResponse> {
+  console.log('Fetching pool/reserve data with body:', requestBody);
+
   try {
-    console.log('Request body:', requestBody);
-
-    // Ensure URL exists
-    if (!process.env.NEXT_PUBLIC_API_URL) {
-      throw new Error('API URL is not configured');
-    }
-
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/optimize-investments`, {
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -175,61 +133,118 @@ export async function fetchDistribution(requestBody: ApiRequestBody): Promise<Ap
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'No error details available');
-      console.error('API Response Error:', {
+      console.error('API Response Error (fetch-pool-data):', {
         status: response.status,
         statusText: response.statusText,
         error: errorText
       });
-      throw new Error(`API error: ${response.status} ${response.statusText}`);
+      throw new Error(`API error fetching pool/reserve data: ${response.status} ${response.statusText}`);
     }
 
-    const data: RawApiResponse = await response.json();
-    console.log('Server response:', data);
+    const data: FetchDataResponseBody = await response.json();
+    console.log('Pool/reserve data received:', data);
+    // Add validation here if needed
+    return data;
+  } catch (error) {
+    console.error('Fetch pool/reserve data error:', error);
+    if (error instanceof Error) {
+      throw new Error(`Failed to fetch pool/reserve data: ${error.message}`);
+    }
+    throw new Error('Failed to fetch pool/reserve data');
+  }
+}
 
-    // Transform API response to match our interface
+/**
+ * Generates the request body for the allocation API
+ * @param reserves - Array of available lending reserves
+ * @param totalFunds - Total amount to be distributed
+ * @param pools - Array of available liquidity pools
+ * @param minAllocationPercent - Optional minimum allocation percentage for each asset
+ * @returns Formatted request body for /calculate-optimal-allocation API
+ */
+export function generateAllocationRequestBody(
+  reserves: Reserve[],
+  totalFunds: number,
+  pools: Pool[],
+  minAllocationPercent?: number
+): AllocationRequestBody {
+  const body: AllocationRequestBody = {
+    total_funds: totalFunds,
+    pools: pools,
+    reserves: reserves,
+  };
+  if (minAllocationPercent !== undefined) {
+    body.min_allocation_percent = minAllocationPercent;
+  }
+  return body;
+}
+
+/**
+ * Fetches optimal allocation from the /calculate-optimal-allocation API (updated)
+ */
+export async function fetchOptimalAllocation(
+  totalFunds: number,
+  pools: Pool[],
+  reserves: Reserve[],
+  minAllocationPercent?: number
+): Promise<ApiResponse> {
+  try {
+    // Generate the request body using the new function
+    const requestBody = generateAllocationRequestBody(reserves, totalFunds, pools, minAllocationPercent);
+    console.log('Calculate optimal allocation request body:', requestBody);
+
+    if (!process.env.NEXT_PUBLIC_API_URL) {
+      throw new Error('API URL is not configured');
+    }
+    const allocationApiUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/calculate-optimal-allocation`;
+
+    const response = await fetch(allocationApiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'No error details available');
+      console.error('API Response Error (calculate-optimal-allocation):', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorText
+      });
+      throw new Error(`API error calculating optimal allocation: ${response.status} ${response.statusText}`);
+    }
+
+    const data: AllocationResponseBody = await response.json();
+    console.log('Calculate optimal allocation server response:', data);
+
+    // Transform API response (updated mapping)
     const transformedData: ApiResponse = {
-      investments: data.details.map(item => {
-        let name = `Unknown-${item.index}`; // Default name
-        const poolCount = requestBody.pools.length;
-        if (item.type === 'pool') {
-          // API index is 1-based, array index is 0-based
-          const poolIndex = item.index - 1;
-          if (poolIndex >= 0 && poolIndex < poolCount && requestBody.pools[poolIndex]) {
-            name = requestBody.pools[poolIndex].name;
-          } else {
-            name = `Pool-${item.index}`; // Fallback if index is invalid
-          }
-        } else {
-          // API index is 1-based and continues after pools. Array index is 0-based.
-          const reserveIndex = item.index - poolCount - 1; 
-          if (reserveIndex >= 0 && reserveIndex < requestBody.reserves.length && requestBody.reserves[reserveIndex]) {
-            name = requestBody.reserves[reserveIndex].name; 
-          } else {
-            name = `Reserve-${item.index}`; // Fallback if index is invalid
-          }
-        }
-
-        return {
-          name: name,
-          allocation: item.allocated_amount,
-          expected_return: item.expected_apy, // Total APY
-          expectedProfit: item.expected_profit, // Map the profit
-          reserve_apy: item.expected_reserve_apy, // APY from reserve
-          rewards_apy: item.expected_rewards_apy, // APY from rewards
-          type: item.type
-        };
-      }),
+      investments: data.details.map(item => ({
+        name: item.name,
+        allocation: item.allocated_amount,
+        expected_return: item.total_apy,
+        expectedProfit: item.expected_profit,
+        reserve_apy: item.base_apy,
+        rewards_apy: item.rewards_apy,
+        total_apr: item.total_apr,
+        base_apr: item.base_apr,         // Added mapping for base_apr
+        rewards_apr: item.rewards_apr,   // Added mapping for rewards_apr
+        type: item.type
+      })),
       total_profit: data.total_profit,
-      total_expected_return: data.total_profit / requestBody.total_funds,
-      total_funds: requestBody.total_funds
+      total_expected_return: totalFunds > 0 ? data.total_profit / totalFunds : 0,
+      total_funds: totalFunds
     };
 
     return transformedData;
   } catch (error) {
-    console.error('Fetch error:', error);
+    console.error('Fetch optimal allocation error:', error);
     if (error instanceof Error) {
-      throw new Error(`Failed to fetch distribution: ${error.message}`);
+      throw new Error(`Failed to fetch optimal allocation: ${error.message}`);
     }
-    throw new Error('Failed to fetch distribution');
+    throw new Error('Failed to fetch optimal allocation');
   }
 } 
