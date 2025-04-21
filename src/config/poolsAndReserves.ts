@@ -1,37 +1,30 @@
-import { Pool, Reserve } from './apiConfig';
+export interface PoolAddress {
+  type: 'pool';
+  address: string;
+}
 
-export const SAMPLE_POOLS: Pool[] = [
+export interface ReserveAddress {
+  type: 'reserve';
+  address: string;
+  source: string;
+}
+
+export const RESERVE_ADDRESSES: ReserveAddress[] = [
+    {
+    type: "reserve",
+    address: "0x00000000efe302beaa2b3e6e1b18d08d69a9012a",
+    source: "lendle"
+  },
   {
-    name: "USDC/USDT_MM",
-    daily_fee: 41.09,
-    pool_distribution: 408788,
-    protocol_fee: 0,
-    reward_per_day: 5124,
-    reward_token_price: 0.02535
+    type: "reserve",
+    address: "0x09bc4e0d864854c6afb6eb9a9cdf58ac190d0df9",
+    source: "lendle"
   }
 ];
 
-export const SAMPLE_RESERVES: Reserve[] = [
-  {
-    name: "USDC Reserve Lendle",
-    total_borrowed: 171898,
-    total_supplied: 548269,
-    optimal_usage_ratio: 0.85,
-    variable_rate_slope1: 0.08,
-    variable_rate_slope2: 0.8,
-    token_price: 1,
-    fee_percentage: 0.3,
-    base_variable_borrow_rate: 0
-  },
-  {
-    name: "USDT Reserve Lendle",
-    total_borrowed: 303980,
-    total_supplied: 1145332,
-    optimal_usage_ratio: 0.85,
-    variable_rate_slope1: 0.08,
-    variable_rate_slope2: 0.8,
-    token_price: 1,
-    fee_percentage: 0.08,
-    base_variable_borrow_rate: 0
-  }
-]; 
+export const POOL_ADDRESSES: PoolAddress[] = [
+    {
+        type: "pool",
+        address: "0x48c1a89af1102cad358549e9bb16ae5f96cddfec"
+    }
+];
