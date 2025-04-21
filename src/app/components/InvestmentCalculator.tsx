@@ -264,8 +264,7 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
   };
 
   return (
-    // Remove relative positioning unless needed for other elements
-    <div className="container mx-auto px-8 py-12">
+    <div className="container mx-auto px-4 sm:px-8 py-12">
        {/* Add some basic CSS for the tooltip */}
        <style>{`
         .tooltip-container {
@@ -413,7 +412,7 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
       </div>
 
       {/* Distribution and Allocation Section - Conditional rendering also checks isClient */}
-      <div className={`grid grid-cols-1 md:grid-cols-2 gap-8 transition-opacity duration-500 ${
+      <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-8 transition-opacity duration-500 ${
         isDistributed && (useDemo || (isClient && isConnected)) && allocation.length > 0 ? 'opacity-100' : 'opacity-0 h-0 overflow-hidden'
       }`}>
         {/* Distribution Chart -> Now BarChart */}
@@ -461,73 +460,83 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
           </div>
         </div>
 
-        {/* Allocation List (UI Updated) */}
-        <div className="card p-8 flex flex-col">
+        {/* Allocation List (Vertical Mobile/Tablet Layout up to lg) */}
+        <div className="card p-4 sm:p-8 flex flex-col">
           <h2 className="text-xl font-semibold mb-2">Allocation</h2>
-          <div className="space-y-2">
-            {/* Allocation List Headers - Updated Columns */}
-            <div className="flex items-center text-xs text-[#9CA3AF] font-semibold mb-2">
-              <div className="flex items-center gap-2 flex-[2] p-1">
+          {/* Use lg:space-y-2 for desktop spacing */} 
+          <div className="space-y-1 lg:space-y-2">
+            {/* Allocation List Headers - Hidden below lg, specific widths lg+ */}
+            <div className="hidden lg:flex items-center text-xs text-[#9CA3AF] font-semibold mb-2">
+              <div className="flex-[2] p-1">
                  <span>Asset</span> 
               </div>
-              {/* Adjusted header spans and labels */}
-              <div className="flex flex-1 justify-end gap-4 p-1">
+              {/* Apply widths from lg+, adjust gap */}
+              {/* Reduced gap slightly */} 
+              <div className="flex flex-1 justify-end gap-2 lg:gap-3 p-1">
                  <span className="w-24 text-right">Allocation ($)</span>
-                 <span className="w-20 text-right">Total APR</span> 
-                 <span className="w-20 text-right">Total APY</span>
+                 <span className="w-16 text-right">Total APR</span> 
+                 <span className="w-16 text-right">Total APY</span>
                  <span className="w-24 text-right">Profit ($)</span> 
               </div>
             </div>
 
-            {/* Allocation List Items - Updated Data Display */} 
+            {/* Allocation List Items - Vertical layout below lg */}
             {allocation.map((item) => {
-              // Helper to format APY/APR
               const formatPercent = (value: number | undefined) => 
                 value !== undefined ? `${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : '-';
-              // Helper to format currency
               const formatCurrency = (value: number | undefined) => 
                 value !== undefined ? `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-';
               
               return (
-                <div 
-                  key={item.name} 
-                  className={`flex items-center transition-colors duration-150 text-sm`}
-                >
-                  {/* Asset Name (remains the same) */}
-                  <div className="flex items-center gap-2 flex-[2] p-1">
-                    <div
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: item.color }}
-                    />
-                    <span className="text-white">{item.name}</span>
+                // Vertical stack below lg, horizontal row lg+
+                <div key={item.name} className={`flex flex-col lg:flex-row lg:items-center transition-colors duration-150 text-sm py-2 border-b border-gray-800 lg:border-none`}>
+                  {/* Asset Name - Full width below lg */} 
+                  <div className="flex items-center gap-2 p-1 mb-1 lg:mb-0 lg:flex-[2]">
+                    <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }}/>
+                    <span className="text-white font-medium break-words">{item.name}</span> 
                   </div>
-                  {/* Adjusted data display spans */}
-                  <div className="flex flex-1 justify-end gap-4 p-1">
-                    {/* Allocated Amount */}
-                    <span className="text-white w-24 text-right">
-                      {formatCurrency(item.allocation)}
-                    </span>
-                    {/* Total APR - Now with Tooltip */}
-                    <div className="tooltip-container w-20 text-right">
-                      <span className="text-gray-400">
-                        {formatPercent(item.total_apr)} 
-                      </span>
-                      <div className="tooltip-content">
-                         <div className="tooltip-row">
-                           <span className="tooltip-label">Base APR</span>
-                           <span className="tooltip-value">{formatPercent(item.base_apr)}</span>
-                         </div>
-                         <div className="tooltip-row">
-                           <span className="tooltip-label">Rewards APR</span>
-                           <span className="tooltip-value">{formatPercent(item.rewards_apr)}</span>
-                         </div>
-                      </div>
-                    </div>
-                    {/* Total APY - Now with Tooltip */}
-                    <div className="tooltip-container w-20 text-right">
-                      <span className="text-[#34D399] font-semibold">
-                         {formatPercent(item.expected_return)} 
-                      </span>
+                  
+                  {/* Data - Mobile/Tablet View (below lg) - Stacked */} 
+                  <div className="block lg:hidden pl-5 space-y-1 text-xs">
+                     <div className="flex justify-between">
+                        <span className='text-[#9CA3AF]'>Allocation:</span>
+                        <span className="text-white font-medium">{formatCurrency(item.allocation)}</span>
+                     </div>
+                      <div className="flex justify-between">
+                        <span className='text-[#9CA3AF]'>Total APY:</span>
+                        <span className="text-[#34D399] font-semibold">
+                           {formatPercent(item.expected_return)} 
+                        </span>
+                     </div>
+                  </div>
+
+                  {/* Data - Desktop View (lg+) - Horizontal Row */} 
+                  <div className="hidden lg:flex flex-1 justify-end gap-2 lg:gap-3 p-1">
+                     {/* Allocated Amount */}
+                     <div className="w-24 text-right">
+                        <span className="text-white">{formatCurrency(item.allocation)}</span>
+                     </div>
+                     {/* Total APR */} 
+                     <div className="tooltip-container w-16 text-right">
+                        <span className="text-gray-400">
+                          {formatPercent(item.total_apr)} 
+                        </span>
+                        <div className="tooltip-content">
+                           <div className="tooltip-row">
+                             <span className="tooltip-label">Base APR</span>
+                             <span className="tooltip-value">{formatPercent(item.base_apr)}</span>
+                           </div>
+                           <div className="tooltip-row">
+                             <span className="tooltip-label">Rewards APR</span>
+                             <span className="tooltip-value">{formatPercent(item.rewards_apr)}</span>
+                           </div>
+                        </div>
+                     </div>
+                     {/* Total APY */} 
+                     <div className="tooltip-container w-16 text-right">
+                        <span className="text-[#34D399] font-semibold">
+                           {formatPercent(item.expected_return)} 
+                        </span>
                        <div className="tooltip-content">
                          <div className="tooltip-row">
                            <span className="tooltip-label">Base APY</span>
@@ -538,16 +547,16 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
                            <span className="tooltip-value">{formatPercent(item.rewards_apy)}</span>
                          </div>
                       </div>
-                    </div>
-                    {/* Expected Profit */}
-                    <span className="text-white w-24 text-right">
-                      {formatCurrency(item.expectedProfit)} 
-                    </span>
+                     </div>
+                     {/* Expected Profit */} 
+                      <div className="w-24 text-right">
+                        <span className="text-white">{formatCurrency(item.expectedProfit)}</span>
+                     </div>
                   </div>
                 </div>
               );
             })}
-            {/* Total Profit Section (remains the same) */}
+            {/* Total Profit Section */}
             {distribution && (
               <div className="pt-4 mt-4 border-t border-[#1E2633]"> 
                  <div className="flex items-center">
