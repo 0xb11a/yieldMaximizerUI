@@ -1,53 +1,49 @@
-const { Logging } = require('@google-cloud/logging');
+import pino from 'pino';
 
-// Створюємо клієнт Logging.
-// У Cloud Run автентифікація зазвичай відбувається автоматично.
-const logging = new Logging();
+// Налаштування pino для роботи в браузері
+// Використовуємо стандартні console методи для виводу,
+// але pino форматує повідомлення як JSON.
+const logger = pino({
+  browser: {
+    // Передаємо об'єкт pino як console, щоб зберегти стандартну поведінку браузера
+    // (наприклад, розгортання об'єктів), але з JSON форматуванням.
+    asObject: true,
+    // Можна налаштувати `transmit` для надсилання логів на сервер,
+    // але для Cloud Run/Cloud Logging достатньо виводу в консоль.
+  },
+  level: 'info', // Встановлюємо рівень логування за замовчуванням
+  base: { 
+    // Додаємо базові поля до кожного логу, якщо потрібно 
+    // pid: undefined, // Вимикаємо pid, бо в браузері його немає
+    // hostname: undefined // Вимикаємо hostname
+  },
+  // Додаємо мітку часу
+  timestamp: pino.stdTimeFunctions.isoTime,
+  // Форматуємо рівень логування у відповідності до Cloud Logging
+  formatters: {
+    level: (label) => {
+      // Перетворюємо стандартні назви рівнів pino на назви Google Cloud Logging
+      // https://cloud.google.com/logging/docs/reference/v2/rest/v2/LogEntry#LogSeverity
+      const pinoLevelToSeverity = {
+        trace: 'DEBUG',
+        debug: 'DEBUG',
+        info: 'INFO',
+        warn: 'WARNING',
+        error: 'ERROR',
+        fatal: 'CRITICAL',
+      };
+      return { severity: pinoLevelToSeverity[label] || label.toUpperCase() };
+    },
+    // Перейменовуємо msg на message для кращої сумісності з Cloud Logging
+    log: (obj) => {
+       if (obj.msg) {
+         obj.message = obj.msg;
+         delete obj.msg;
+       }
+       return obj;
+    }
+  }
+});
 
-// Обираємо синхронні логери для stdout та stderr.
-// Cloud Run автоматично перехопить ці потоки та зв'яже з ресурсом.
-const stdoutLog = logging.logSync('stdout');
-const stderrLog = logging.logSync('stderr');
-
-// Стандартні рівні серйозності для Stackdriver Logging
-const SEVERITY = {
-  DEBUG: 'DEBUG',
-  INFO: 'INFO',
-  NOTICE: 'NOTICE',
-  WARNING: 'WARNING',
-  ERROR: 'ERROR',
-  CRITICAL: 'CRITICAL',
-  ALERT: 'ALERT',
-  EMERGENCY: 'EMERGENCY',
-};
-
-/**
- * Записує структурований лог-запис.
- * @param {string} severity Рівень серйозності (з SEVERITY).
- * @param {string} message Основне повідомлення логу.
- * @param {object} [data={}] Додаткові дані для запису в JSON-форматі.
- */
-const writeLog = (severity, message, data = {}) => {
-  const logInstance = (severity === SEVERITY.ERROR || severity === SEVERITY.CRITICAL || severity === SEVERITY.ALERT || severity === SEVERITY.EMERGENCY)
-    ? stderrLog
-    : stdoutLog;
-
-  // Створюємо запис логу.
-  // Cloud Logging автоматично розпізнає поле 'message' та інші поля.
-  const entry = logInstance.entry({ severity }, { message, ...data });
-
-  // Записуємо лог.
-  logInstance.write(entry);
-};
-
-// Експортуємо функції для різних рівнів логування
-const logger = {
-  debug: (message, data) => writeLog(SEVERITY.DEBUG, message, data),
-  info: (message, data) => writeLog(SEVERITY.INFO, message, data),
-  warn: (message, data) => writeLog(SEVERITY.WARNING, message, data),
-  error: (message, data) => writeLog(SEVERITY.ERROR, message, data),
-  critical: (message, data) => writeLog(SEVERITY.CRITICAL, message, data),
-  // Додай інші рівні за потребою
-};
-
-module.exports = logger; 
+// Експортуємо логгер
+export default logger; 

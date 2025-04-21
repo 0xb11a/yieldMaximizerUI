@@ -136,8 +136,8 @@ export async function fetchPoolAndReserveData(walletAddress: string): Promise<Fe
       const errorText = await response.text().catch(() => 'No error details available');
       logger.error('API Response Error (fetch-pool-data)', {
          url: apiUrl,
-         status: response.status,
-         statusText: response.statusText,
+        status: response.status,
+        statusText: response.statusText,
          errorBody: errorText
       });
       throw new Error(`API error fetching pool/reserve data: ${response.status} ${response.statusText}`);
@@ -203,7 +203,7 @@ export async function fetchOptimalAllocation(
   try {
     // Generate the request body using the new function
     const requestBody = generateAllocationRequestBody(reserves, totalFunds, pools, minAllocationPercent);
-    
+
     if (!process.env.NEXT_PUBLIC_API_URL) {
       // Throwing error here, no need to log separately as it will be caught below
       throw new Error('API URL is not configured');
@@ -226,8 +226,8 @@ export async function fetchOptimalAllocation(
       const errorText = await response.text().catch(() => 'No error details available');
       logger.error('API Response Error (calculate-optimal-allocation)', {
          url: allocationApiUrl,
-         status: response.status,
-         statusText: response.statusText,
+        status: response.status,
+        statusText: response.statusText,
          errorBody: errorText
       });
       throw new Error(`API error calculating optimal allocation: ${response.status} ${response.statusText}`);
