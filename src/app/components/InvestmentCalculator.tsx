@@ -201,13 +201,13 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
     } catch (err) {
       let errorMessage = 'An unexpected error occurred during distribution';
       if (err instanceof Error) {
-          if (err.message.includes('Failed to fetch') || err instanceof TypeError) {
-              errorMessage = 'Unable to connect to the server. Please check the API.';
-          } else if (err.message.includes('API error')) {
-              errorMessage = `Server error: ${err.message.split(': ')[1] || 'Unknown issue'}`;
-          } else {
-              errorMessage = `Error: ${err.message}`;
-          }
+
+        if (err.message.includes('Failed to fetch') || err instanceof TypeError) { 
+           errorMessage = 'Unable to connect to the server.' + process.env.NEXT_PUBLIC_API_URL;
+        } else {
+           errorMessage = 'An error occurred while fetching data from the server.';
+        }
+
       } 
       setError(errorMessage);
       console.error('Distribution Process Error:', err);
