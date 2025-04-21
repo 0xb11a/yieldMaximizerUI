@@ -19,8 +19,8 @@ interface PoolInfoProps {
 }
 
 export default function PoolInfo({ title, color, data }: PoolInfoProps) {
-  const formatApy = (apy: number | undefined) => 
-    apy !== undefined ? `${apy.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : 'N/A';
+  // const formatApy = (apy: number | undefined) => 
+  //   apy !== undefined ? `${apy.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : 'N/A';
 
   // Helper to format currency amount
   const formatCurrency = (amount: number | undefined) => 

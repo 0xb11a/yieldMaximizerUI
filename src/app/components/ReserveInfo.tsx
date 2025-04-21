@@ -21,8 +21,8 @@ interface ReserveInfoProps {
 
 export default function ReserveInfo({ title, color, investmentData, reserveData }: ReserveInfoProps) {
   // Helper to format APY (same as in PoolInfo)
-  const formatApy = (apy: number | undefined) => 
-    apy !== undefined ? `${apy.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : 'N/A';
+  // const formatApy = (apy: number | undefined) => 
+  //   apy !== undefined ? `${apy.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : 'N/A';
 
   // Helper to format currency amount
   const formatCurrency = (amount: number | undefined) => 
