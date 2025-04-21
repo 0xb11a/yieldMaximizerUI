@@ -1,5 +1,4 @@
 import { POOL_ADDRESSES, RESERVE_ADDRESSES, PoolAddress, ReserveAddress } from './poolsAndReserves';
-import logger from '@/utils/logger';
 
 /**
  * Represents a lending reserve with its key parameters
@@ -120,7 +119,7 @@ export async function fetchPoolAndReserveData(walletAddress: string): Promise<Fe
     funds: funds
   };
 
-  logger.info('Fetching pool/reserve data request', { url: apiUrl, body: requestBody });
+  console.log('Fetching pool/reserve data with body:', requestBody);
 
   try {
     const response = await fetch(apiUrl, {
@@ -134,26 +133,20 @@ export async function fetchPoolAndReserveData(walletAddress: string): Promise<Fe
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'No error details available');
-      logger.error('API Response Error (fetch-pool-data)', {
-         url: apiUrl,
-         status: response.status,
-         statusText: response.statusText,
-         errorBody: errorText
+      console.error('API Response Error (fetch-pool-data):', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorText
       });
       throw new Error(`API error fetching pool/reserve data: ${response.status} ${response.statusText}`);
     }
 
     const data: FetchDataResponseBody = await response.json();
-    logger.info('Pool/reserve data received successfully', { url: apiUrl, data });
+    console.log('Pool/reserve data received:', data);
     // Add validation here if needed
     return data;
   } catch (error) {
-    logger.error('Fetch pool/reserve data error', {
-        url: apiUrl,
-        errorMessage: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-        originalError: error
-    });
+    console.error('Fetch pool/reserve data error:', error);
     if (error instanceof Error) {
       throw new Error(`Failed to fetch pool/reserve data: ${error.message}`);
     }
@@ -195,23 +188,15 @@ export async function fetchOptimalAllocation(
   reserves: Reserve[],
   minAllocationPercent?: number
 ): Promise<ApiResponse> {
-  // Declare allocationApiUrl here so it's accessible in catch block
-  const allocationApiUrl = process.env.NEXT_PUBLIC_API_URL 
-      ? `${process.env.NEXT_PUBLIC_API_URL}/api/calculate-optimal-allocation`
-      : ''; // Provide a default or handle missing URL appropriately
-
   try {
     // Generate the request body using the new function
     const requestBody = generateAllocationRequestBody(reserves, totalFunds, pools, minAllocationPercent);
-    
+    console.log('Calculate optimal allocation request body:', requestBody);
+
     if (!process.env.NEXT_PUBLIC_API_URL) {
-      // Throwing error here, no need to log separately as it will be caught below
       throw new Error('API URL is not configured');
     }
-    // Removed declaration from here
-    // const allocationApiUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/calculate-optimal-allocation`;
-
-    logger.info('Calculate optimal allocation request', { url: allocationApiUrl, body: requestBody });
+    const allocationApiUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/calculate-optimal-allocation`;
 
     const response = await fetch(allocationApiUrl, {
       method: 'POST',
@@ -224,17 +209,16 @@ export async function fetchOptimalAllocation(
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'No error details available');
-      logger.error('API Response Error (calculate-optimal-allocation)', {
-         url: allocationApiUrl,
-         status: response.status,
-         statusText: response.statusText,
-         errorBody: errorText
+      console.error('API Response Error (calculate-optimal-allocation):', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorText
       });
       throw new Error(`API error calculating optimal allocation: ${response.status} ${response.statusText}`);
     }
 
     const data: AllocationResponseBody = await response.json();
-    logger.info('Calculate optimal allocation server response received', { url: allocationApiUrl, data });
+    console.log('Calculate optimal allocation server response:', data);
 
     // Transform API response (updated mapping)
     const transformedData: ApiResponse = {
@@ -257,11 +241,7 @@ export async function fetchOptimalAllocation(
 
     return transformedData;
   } catch (error) {
-    logger.error('Fetch optimal allocation error', {
-       errorMessage: error instanceof Error ? error.message : String(error),
-       stack: error instanceof Error ? error.stack : undefined,
-       originalError: error
-    });
+    console.error('Fetch optimal allocation error:', error);
     if (error instanceof Error) {
       throw new Error(`Failed to fetch optimal allocation: ${error.message}`);
     }

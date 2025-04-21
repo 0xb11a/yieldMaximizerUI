@@ -13,7 +13,7 @@ interface ReserveInfoProps {
   reserveData?: ReserveSpecificData; // Add optional prop for reserve-specific data
 }
 
-export default function ReserveInfo({ title, color, reserveData }: ReserveInfoProps) {
+export default function ReserveInfo({ title, color, investmentData, reserveData }: ReserveInfoProps) {
   // Helper to format APY (same as in PoolInfo)
   // const formatApy = (apy: number | undefined) => 
   //   apy !== undefined ? `${apy.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : 'N/A';
