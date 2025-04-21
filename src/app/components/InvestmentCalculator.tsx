@@ -20,7 +20,6 @@ import { injected } from 'wagmi/connectors'; // Import the connector
 import { formatEther } from 'viem'; // Import formatEther
 // Add NameType and ValueType imports
 import { NameType, ValueType } from 'recharts/types/component/DefaultTooltipContent';
-import logger from '@/utils/logger'; // Import the logger
 
 interface AllocationItem {
   name: string;
@@ -140,7 +139,7 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
       totalFundsForCalc = demoFundsAmount;
       // Use a placeholder/demo wallet address for fetching pool/reserve data
       walletAddressToUse = process.env.NEXT_PUBLIC_DEMO_WALLET_ADDRESS || "0x0000000000000000000000000000000000000000"; 
-      logger.info('Running in Demo Mode', { totalFunds: totalFundsForCalc }); // Use logger
+      console.log(`Running in Demo Mode with ${totalFundsForCalc} funds`);
     } else {
       if (!isConnected || !address) {
           setError('Please connect your wallet first.');
@@ -151,12 +150,7 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
 
       if (!balanceData || isBalanceLoading || isBalanceError) {
         setError('Could not fetch wallet balance or balance is zero.');
-        logger.error('Balance Error or Loading', { // Use logger
-          hasBalanceData: !!balanceData,
-          isBalanceLoading,
-          isBalanceError,
-          address: walletAddressToUse // Add context
-        });
+        console.error('Balance Error or Loading:', { balanceData, isBalanceLoading, isBalanceError });
         setIsLoading(false);
         return;
       }
@@ -170,13 +164,14 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
 
     try {
       // Step 1: Fetch Pool and Reserve Data
-      logger.info('Fetching pool and reserve data', { address: walletAddressToUse }); // Use logger
+      console.log('Fetching pool and reserve data for address:', walletAddressToUse);
       const poolReserveData = await fetchPoolAndReserveData(walletAddressToUse);
       // Added console log for fetchPoolAndReserveData response
-      logger.info('<<< Raw Response from fetchPoolAndReserveData >>>', { poolReserveData }); // Use logger
+      console.log('<<< Raw Response from fetchPoolAndReserveData >>>:', poolReserveData);
       setFetchedPools(poolReserveData.pools);
       setFetchedReserves(poolReserveData.reserves);
-      logger.info('Fetched Pool/Reserve Data', { pools: poolReserveData.pools, reserves: poolReserveData.reserves }); // Use logger
+      console.log('Fetched Pools:', poolReserveData.pools);
+      console.log('Fetched Reserves:', poolReserveData.reserves);
 
       // Check if pools or reserves are empty after fetching
       if (poolReserveData.pools.length === 0 && poolReserveData.reserves.length === 0) {
@@ -186,7 +181,7 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
       }
 
       // Step 2: Fetch Optimal Allocation using data from Step 1
-      logger.info('Fetching optimal allocation', { totalFunds: totalFundsForCalc }); // Use logger
+      console.log('Fetching optimal allocation with total funds:', totalFundsForCalc);
       // Using the renamed function fetchOptimalAllocation
       const allocationData = await fetchOptimalAllocation(
           totalFundsForCalc,
@@ -195,7 +190,7 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
           1 // Example: Set min_allocation_percent to 1%, make this configurable if needed
       );
       // Added console log for fetchOptimalAllocation response
-      logger.info('<<< Raw Response from fetchOptimalAllocation >>>', { allocationData }); // Use logger
+      console.log('<<< Raw Response from fetchOptimalAllocation >>>:', allocationData);
       
       const newAllocation = calculateDistribution(allocationData);
       
@@ -215,11 +210,7 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
 
       } 
       setError(errorMessage);
-      logger.error('Distribution Process Error', { // Use logger
-        message: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-        originalError: err // Include the original error object if possible
-      });
+      console.error('Distribution Process Error:', err);
       // Keep state cleared
       setDistribution(null);
       setAllocation(INITIAL_ALLOCATION);
