@@ -55,16 +55,22 @@ export default function BalanceListItem({ asset, address }: BalanceListItemProps
   return (
     // List item styling copied from WalletBalanceDisplay
     <div className="flex justify-between items-center text-sm p-2 md:p-3 hover:bg-[#1E293B] transition-colors">
-      <span className="text-gray-300 w-16 md:w-20 truncate font-medium">{asset.symbol}</span>
-      {isError ? (
-        <span className="text-red-500 text-right text-xs">Error</span>
-      ) : isLoading && validAddress ? ( // Only show loading if address is valid
-        <span className="text-gray-500 text-right text-xs animate-pulse">...</span>
-      ) : validAddress ? ( // Only show balance if address is valid
-        <span className="text-white font-mono text-right">{parseFloat(formattedBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}</span>
-      ) : (
-        <span className="text-gray-500 text-right">-</span> // Placeholder if no address
-      )}
+      {/* Display Name (Symbol) */}
+      <span className="text-gray-300 font-medium mr-2 flex-shrink-0"> 
+        {`${asset.name} (${asset.symbol})`}
+      </span>
+      {/* Balance/Status */}
+      <div className="text-right">
+        {isError ? (
+          <span className="text-red-500 text-xs">Error</span>
+        ) : isLoading && validAddress ? ( // Only show loading if address is valid
+          <span className="text-gray-500 text-xs animate-pulse">...</span>
+        ) : validAddress ? ( // Only show balance if address is valid
+          <span className="text-white font-mono">{parseFloat(formattedBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}</span>
+        ) : (
+          <span className="text-gray-500">-</span> // Placeholder if no address
+        )}
+      </div>
     </div>
   );
 } 
