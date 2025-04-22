@@ -1,23 +1,165 @@
 'use client';
 
-// Remove useState import if no longer needed (assuming it's not used elsewhere)
-// import { useState } from 'react'; 
+import { useState, useEffect } from 'react';
+import { useBalance, useReadContract } from 'wagmi';
+import { isAddress, formatUnits, Address } from 'viem';
+import { AssetData } from '@/types';
+import { erc20Abi } from '@/config/constants';
+
 import Header from './components/Header';
 import InvestmentCalculator from '@/app/components/InvestmentCalculator';
 import WalletBalanceDisplay from '@/app/components/WalletBalanceDisplay';
 
+// --- Define Assets within Page ---
+const usdcAsset: AssetData = {
+  address: '0x09bc4e0d864854c6afb6eb9a9cdf58ac190d0df9',
+  symbol: 'USDC',
+  name: 'Wallet USDC',
+  decimals: 6,
+};
+
+const lvUsdcAsset: AssetData = {
+  address: '0xf36afb467d1f05541d998bbbcd5f7167d67bd8fc',
+  symbol: 'lvUSDC',
+  name: 'Lendle USDC Supply',
+  decimals: 6,
+};
+
+const iUsdcAsset: AssetData = {
+  address: '0x00a55649e597d463fd212fbe48a3b40f0e227d06',
+  symbol: 'iUSDC',
+  name: 'InitCapital USDC Supply',
+  decimals: 6,
+};
+// ---
+
 export default function Home() {
-  // Remove useDemo state
-  // const [useDemo, setUseDemo] = useState(false);
+  // --- State Management in Page ---
+  const [manualAddress, setManualAddress] = useState<string>('');
+  const [displayAddress, setDisplayAddress] = useState<Address | undefined>(undefined);
+  const [isManualAddressValid, setIsManualAddressValid] = useState<boolean>(true);
+  const [totalSupplyValue, setTotalSupplyValue] = useState<number>(0);
+  // ---
+
+  // --- Balance Fetching Hooks ---
+  const validAddress = displayAddress; // Use displayAddress directly
+
+  // 1. Wallet USDC Balance
+  const { 
+    data: usdcBalanceData, 
+    isError: usdcIsError, 
+    isLoading: usdcIsLoading 
+  } = useBalance({
+    address: validAddress,
+    token: usdcAsset.address as Address, // Specify token for ERC20 via useBalance
+    query: { 
+      enabled: !!validAddress, 
+    },
+  });
+
+  // 2. Lendle lvUSDC Balance
+  const { 
+    data: lvUsdcBalanceData, 
+    isError: lvUsdcIsError, 
+    isLoading: lvUsdcIsLoading 
+  } = useReadContract({
+    address: lvUsdcAsset.address as Address,
+    abi: erc20Abi,
+    functionName: 'balanceOf',
+    args: validAddress ? [validAddress] : undefined,
+    query: { 
+      enabled: !!validAddress, 
+    },
+  });
+
+  // 3. InitCapital iUSDC Balance
+  const { 
+    data: iUsdcBalanceData, 
+    isError: iUsdcIsError, 
+    isLoading: iUsdcIsLoading 
+  } = useReadContract({
+    address: iUsdcAsset.address as Address,
+    abi: erc20Abi,
+    functionName: 'balanceOf',
+    args: validAddress ? [validAddress] : undefined,
+    query: { 
+      enabled: !!validAddress, 
+    },
+  });
+  // ---
+
+  // --- Calculate Total Supply Effect ---
+  useEffect(() => {
+    const usdcBal = usdcBalanceData?.value ?? BigInt(0);
+    const lvUsdcBal = (lvUsdcBalanceData as bigint) ?? BigInt(0);
+    const iUsdcBal = (iUsdcBalanceData as bigint) ?? BigInt(0);
+
+    // Check if all are loaded and no errors before summing
+    const allLoaded = !usdcIsLoading && !lvUsdcIsLoading && !iUsdcIsLoading;
+    const anyError = usdcIsError || lvUsdcIsError || iUsdcIsError;
+
+    if (validAddress && allLoaded && !anyError) {
+      const totalBigInt = usdcBal + lvUsdcBal + iUsdcBal;
+      // Assuming all relevant tokens share the same decimals (6 in this case)
+      // If decimals differ, more complex formatting is needed.
+      const formattedTotal = formatUnits(totalBigInt, usdcAsset.decimals); 
+      setTotalSupplyValue(parseFloat(formattedTotal));
+    } else if (!validAddress) {
+      // Reset total if address is cleared
+      setTotalSupplyValue(0);
+    }
+
+    // Dependencies: run when address or any balance data changes
+  }, [validAddress, usdcBalanceData, lvUsdcBalanceData, iUsdcBalanceData, usdcIsLoading, lvUsdcIsLoading, iUsdcIsLoading, usdcIsError, lvUsdcIsError, iUsdcIsError]);
+  // ---
+
+  // --- Event Handlers ---
+  const handleManualAddressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newAddress = e.target.value;
+    setManualAddress(newAddress);
+    const isValid = newAddress === '' || isAddress(newAddress);
+    setIsManualAddressValid(isValid);
+    if (!isValid) {
+        setDisplayAddress(undefined);
+    }
+  };
+
+  const handleShowManualBalances = () => {
+     if (isAddress(manualAddress)) {
+        setDisplayAddress(manualAddress as Address);
+        setIsManualAddressValid(true);
+     } else {
+        setIsManualAddressValid(false);
+        setDisplayAddress(undefined);
+     }
+  };
+  // ---
+
+  // --- Prepare Props for WalletBalanceDisplay ---
+  // Pass individual balance details for display
+  const balanceDisplayData = [
+    { ...usdcAsset, isLoading: usdcIsLoading, isError: usdcIsError, value: usdcBalanceData?.value },
+    { ...lvUsdcAsset, isLoading: lvUsdcIsLoading, isError: lvUsdcIsError, value: lvUsdcBalanceData },
+    { ...iUsdcAsset, isLoading: iUsdcIsLoading, isError: iUsdcIsError, value: iUsdcBalanceData },
+  ];
+  // ---
 
   return (
     <div className="min-h-screen bg-[#111827]">
-      {/* Remove onDemoChange prop from Header */}
       <Header /> 
-      <main className="text-[#F9FAFB]"> 
+      <main className="text-[#F9FAFB]">
         <div className="container mx-auto px-4 sm:px-8 py-12">
-          <WalletBalanceDisplay />
-          <InvestmentCalculator />
+          <WalletBalanceDisplay 
+            manualAddress={manualAddress}
+            isManualAddressValid={isManualAddressValid}
+            onManualAddressChange={handleManualAddressChange}
+            onShowManualBalances={handleShowManualBalances}
+            displayAddress={displayAddress}
+            balanceDisplayData={balanceDisplayData} // Pass formatted data for display
+          />
+          <InvestmentCalculator 
+            initialFunds={totalSupplyValue} // Pass the calculated total supply
+          />
         </div>
       </main>
       <footer className="border-t border-[#1E2633] py-8">

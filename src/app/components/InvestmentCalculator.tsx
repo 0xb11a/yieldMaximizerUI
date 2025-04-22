@@ -35,7 +35,12 @@ interface AllocationItem {
 
 const INITIAL_ALLOCATION: AllocationItem[] = [];
 
-export default function InvestmentCalculator(/*{ useDemo = false }: InvestmentCalculatorProps*/) {
+// Define props for the component
+interface InvestmentCalculatorProps {
+  initialFunds?: number; // Receive initial funds from parent
+}
+
+export default function InvestmentCalculator({ initialFunds = 0 }: InvestmentCalculatorProps) { // Default to 0
   const [isDistributed, setIsDistributed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [allocation, setAllocation] = useState<AllocationItem[]>(INITIAL_ALLOCATION);
@@ -47,9 +52,6 @@ export default function InvestmentCalculator(/*{ useDemo = false }: InvestmentCa
 
   // State to track client-side mounting
   const [isClient, setIsClient] = useState(false);
-
-  // State for dynamic demo funds - Initialize with a default value
-  const [demoFundsAmount, setDemoFundsAmount] = useState<number>(10000); // Default to 10000
 
   // State to hold fetched pool and reserve data
   const [fetchedPools, setFetchedPools] = useState<Pool[]>([]);
@@ -96,6 +98,12 @@ export default function InvestmentCalculator(/*{ useDemo = false }: InvestmentCa
 
   // Updated handleDistribute - Always use demo logic
   const handleDistribute = async () => {
+    // Use initialFunds prop now
+    if (initialFunds <= 0) {
+      setError("Please provide a valid supply value."); // Or handle this upstream
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     setDistribution(null); // Reset previous results
@@ -104,9 +112,9 @@ export default function InvestmentCalculator(/*{ useDemo = false }: InvestmentCa
     setFetchedReserves([]);
     setIsDistributed(false);
 
-    const totalFundsForCalc: number = demoFundsAmount;
+    const totalFundsForCalc: number = initialFunds; // Use prop
     const walletAddressToUse: string = process.env.NEXT_PUBLIC_DEMO_WALLET_ADDRESS || "0x0000000000000000000000000000000000000000";
-    logger.info('Running in Demo Mode (Forced)', { totalFunds: totalFundsForCalc }); // Use logger
+    logger.info('Starting calculation', { totalFunds: totalFundsForCalc });
 
     try {
       // Step 1: Fetch Pool and Reserve Data
@@ -268,71 +276,47 @@ export default function InvestmentCalculator(/*{ useDemo = false }: InvestmentCa
       {/* <CustomTooltip /> */}
       <h1 className="text-3xl font-bold mb-8">Yield Maximizer</h1>
       
-      {/* Always show Demo Funds Input and Distribute Button */}
-      <div className="card p-8 mb-12">
-          <div className="flex flex-col gap-4">
-              {/* Demo Funds Input */}
-              <div className="mt-4">
-                <label htmlFor="demoFundsInput" className="block text-sm font-medium text-[#9CA3AF] mb-1">
-                  Set Funds Amount ($)
-                </label>
-                <input
-                  type="number"
-                  id="demoFundsInput"
-                  value={demoFundsAmount.toString()}
-                  onChange={(e) => {
-                    const value = parseFloat(e.target.value);
-                    setDemoFundsAmount(isNaN(value) || value < 0 ? 0 : value);
-                  }}
-                  className="w-full px-3 py-2 bg-[#111827] border border-[#374151] rounded-md text-white focus:outline-none focus:ring-1 focus:ring-[#10B981] focus:border-[#10B981]"
-                  placeholder="Enter funds amount"
-                  min="0" // Optional: prevent negative values
-                />
-              </div>
-           
-              {/* Show Distribute button logic */}
-              <button
-                onClick={handleDistribute}
-                // Updated disable logic - only disable if loading
-                disabled={isLoading}
-                className={`w-full px-6 py-3 bg-[#10B981] hover:bg-[#059669] text-white rounded-lg transition-colors ${ 
-                  isLoading ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-              >
-                {isLoading ? 'Calculating...' : 'Calculate Optimal Yield'}
-              </button>
-          </div>
-      </div>
+      {/* ADD Button to trigger calculation using parent-provided funds */}
+      <div className="mb-8">
+         <button
+            onClick={handleDistribute}
+            disabled={isLoading || initialFunds <= 0} // Disable if loading or no funds
+            className={`w-full px-6 py-3 bg-[#10B981] hover:bg-[#059669] text-white rounded-lg transition-colors ${ 
+              (isLoading || initialFunds <= 0) ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+          >
+            {isLoading ? 'Calculating...' : 'Calculate Optimal Yield'}
+          </button>
+       </div>
 
       {/* Error Display */}
       {isClient && error && (
-        <div className="text-red-500 text-sm mt-2">
+        <div className="text-red-500 text-sm mt-2 mb-4"> {/* Add margin below error */}
           {error}
         </div>
       )}
 
-      {/* Distribution and Allocation Section - Conditional rendering also checks isClient */}
-      <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-8 transition-opacity duration-500 ${
-        isDistributed && allocation.length > 0 ? 'opacity-100' : 'opacity-0 h-0 overflow-hidden'
+      {/* Distribution and Allocation Section */}
+      <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-8 transition-opacity duration-500 ${ 
+        (isDistributed && allocation.length > 0 && !isLoading) ? 'opacity-100' : 'opacity-0 h-0 overflow-hidden' // Added !isLoading to hide during recalc
       }`}>
-        {/* Distribution Chart -> Now BarChart */}
+        {/* Distribution Chart */}
         <div className="card p-8">
           <h2 className="text-xl font-semibold mb-2">Distribution</h2>
-          {/* Use ResponsiveContainer for BarChart */}
           <div style={{ width: '100%', height: 300 }}>
             <ResponsiveContainer>
               <BarChart 
                 data={allocation} 
-                margin={{ top: 5, right: 0, left: 0, bottom: 5 }} // Adjusted margins
+                margin={{ top: 5, right: 0, left: 0, bottom: 5 }} 
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" /> {/* Darker grid */}
-                <XAxis dataKey="name" hide /> {/* Hide X-axis labels, use tooltip */}
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                <XAxis dataKey="name" hide />
                 <YAxis 
                   tickFormatter={formatYAxisTick} 
-                  stroke="#9CA3AF" // Axis line color
-                  tick={{ fill: '#9CA3AF', fontSize: 12 }} // Tick label color and size
+                  stroke="#9CA3AF"
+                  tick={{ fill: '#9CA3AF', fontSize: 12 }}
                 />
-                <Tooltip content={<CustomBarTooltip />} cursor={{ fill: 'rgba(107, 114, 128, 0.1)' }} /> {/* Custom tooltip and hover cursor*/}
+                <Tooltip content={<CustomBarTooltip />} cursor={{ fill: 'rgba(107, 114, 128, 0.1)' }} />
                 <Bar dataKey="allocation">
                   {allocation.map((entry) => (
                     <Cell key={`cell-${entry.name}`} fill={entry.color} />
@@ -343,18 +327,15 @@ export default function InvestmentCalculator(/*{ useDemo = false }: InvestmentCa
           </div>
         </div>
 
-        {/* Allocation List (Vertical Mobile/Tablet Layout up to lg) */}
+        {/* Allocation List */} 
         <div className="card p-4 sm:p-8 flex flex-col">
           <h2 className="text-xl font-semibold mb-2">Allocation</h2>
-          {/* Use lg:space-y-2 for desktop spacing */} 
-          <div className="space-y-1 lg:space-y-2">
-            {/* Allocation List Headers - Hidden below lg, specific widths lg+ */}
+          <div className="space-y-1 lg:space-y-2 flex-grow">
+            {/* Headers */}
             <div className="hidden lg:flex items-center text-xs text-[#9CA3AF] font-semibold mb-2">
               <div className="flex-[2] p-1">
                  <span>Asset</span> 
               </div>
-              {/* Apply widths from lg+, adjust gap */}
-              {/* Reduced gap slightly */} 
               <div className="flex flex-1 justify-end gap-2 lg:gap-3 p-1">
                  <span className="w-24 text-right">Allocation ($)</span>
                  <span className="w-16 text-right">Total APR</span> 
@@ -363,7 +344,7 @@ export default function InvestmentCalculator(/*{ useDemo = false }: InvestmentCa
               </div>
             </div>
 
-            {/* Allocation List Items - Vertical layout below lg */}
+            {/* Items */}
             {allocation.map((item) => {
               const formatPercent = (value: number | undefined) => 
                 value !== undefined ? `${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : '-';
@@ -371,15 +352,14 @@ export default function InvestmentCalculator(/*{ useDemo = false }: InvestmentCa
                 value !== undefined ? `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-';
               
               return (
-                // Vertical stack below lg, horizontal row lg+
-                <div key={item.name} className={`flex flex-col lg:flex-row lg:items-center transition-colors duration-150 text-sm py-2 border-b border-gray-800 lg:border-none`}>
-                  {/* Asset Name - Full width below lg */} 
+                <div key={item.name} className={`flex flex-col lg:flex-row lg:items-center transition-colors duration-150 text-sm py-2 border-b border-gray-800 lg:border-none last:border-b-0`}>
+                  {/* Asset Name */}
                   <div className="flex items-center gap-2 p-1 mb-1 lg:mb-0 lg:flex-[2]">
                     <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }}/>
                     <span className="text-white font-medium break-words">{item.name}</span> 
                   </div>
                   
-                  {/* Data - Mobile/Tablet View (below lg) - Stacked */} 
+                  {/* Data - Mobile/Tablet View */}
                   <div className="block lg:hidden pl-5 space-y-1 text-xs">
                      <div className="flex justify-between">
                         <span className='text-[#9CA3AF]'>Allocation:</span>
@@ -391,17 +371,24 @@ export default function InvestmentCalculator(/*{ useDemo = false }: InvestmentCa
                            {formatPercent(item.expected_return)} 
                         </span>
                      </div>
+                      <div className="flex justify-between">
+                        <span className='text-[#9CA3AF]'>Profit:</span>
+                        <span className="text-white font-medium">
+                           {formatCurrency(item.expectedProfit)} 
+                        </span>
+                     </div>
+                     {/* Optionally add APR breakdown here too */}
                   </div>
 
-                  {/* Data - Desktop View (lg+) - Horizontal Row */} 
+                  {/* Data - Desktop View */}
                   <div className="hidden lg:flex flex-1 justify-end gap-2 lg:gap-3 p-1">
-                     {/* Allocated Amount */}
+                     {/* Allocation */}
                      <div className="w-24 text-right">
                         <span className="text-white">{formatCurrency(item.allocation)}</span>
                      </div>
-                     {/* Total APR */} 
+                     {/* Total APR */}
                      <div className="tooltip-container w-16 text-right">
-                        <span className="text-gray-400">
+                        <span className="text-gray-400 hover:text-white cursor-help">
                           {formatPercent(item.total_apr)} 
                         </span>
                         <div className="tooltip-content">
@@ -415,9 +402,9 @@ export default function InvestmentCalculator(/*{ useDemo = false }: InvestmentCa
                            </div>
                         </div>
                      </div>
-                     {/* Total APY */} 
+                     {/* Total APY */}
                      <div className="tooltip-container w-16 text-right">
-                        <span className="text-[#34D399] font-semibold">
+                        <span className="text-[#34D399] font-semibold hover:text-emerald-400 cursor-help">
                            {formatPercent(item.expected_return)} 
                         </span>
                        <div className="tooltip-content">
@@ -431,80 +418,61 @@ export default function InvestmentCalculator(/*{ useDemo = false }: InvestmentCa
                          </div>
                       </div>
                      </div>
-                     {/* Expected Profit */} 
+                     {/* Profit */}
                       <div className="w-24 text-right">
                         <span className="text-white">{formatCurrency(item.expectedProfit)}</span>
                      </div>
                   </div>
                 </div>
               );
-            })}
+            })} 
+            </div>
             {/* Total Profit Section */}
             {distribution && (
-              <div className="pt-4 mt-4 border-t border-[#1E2633]"> 
-                 <div className="flex items-center">
-                  <span className="text-[#34D399] flex-[2]">Total Profit</span>
-                  <span className="text-[#34D399] flex-1 text-right">
+              <div className="pt-4 mt-auto border-t border-[#1E2633]"> {/* Use mt-auto to push to bottom */}
+                 <div className="flex items-center justify-between">
+                  <span className="text-[#34D399] font-semibold flex-[2]">Total Profit</span>
+                  <span className="text-[#34D399] font-semibold text-right">
                     ${distribution.total_profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
               </div>
             )}
-          </div>
         </div>
       </div>
 
-      {/* Pool & Reserves Information - Updated Logic */}
+      {/* Pool & Reserves Information */}
       {isDistributed && distribution && (fetchedPools.length > 0 || fetchedReserves.length > 0) && (
         <>
           <h2 className="text-2xl font-bold mt-12 mb-6">Pools & Reserves Information</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 animate-fadeIn">
-            {/* Map over investments and display corresponding PoolInfo */}  
             {distribution.investments
               .filter(inv => inv.type === 'pool' && inv.allocation > 0)
               .map((investment: Investment) => {
                 const originalPoolData = fetchedPools.find(p => p.name === investment.name);
                 if (!originalPoolData) return null;
                 const originalIndex = fetchedPools.findIndex(p => p.name === investment.name);
-
                 return (
                   <PoolInfo
                     key={investment.name}
                     title={investment.name}
                     color={getInvestmentColor('pool', originalIndex)}
-                    data={{
-                      daily_fee: originalPoolData.daily_fee,
-                      pool_distribution: originalPoolData.pool_distribution,
-                      reward_per_day: originalPoolData.reward_per_day,
-                      reward_token_price: originalPoolData.reward_token_price
-                    }}
+                    data={originalPoolData}
                   />
                 );
             })}
-            
-            {/* Map over investments and display corresponding ReserveInfo */}  
             {distribution.investments
               .filter(inv => inv.type === 'reserve' && inv.allocation > 0)
-              // Added type annotation for inv
               .map((investment: Investment) => {
-                // Find the full reserve data from the fetched state
                 const originalReserveData = fetchedReserves.find(r => r.name === investment.name);
-                if (!originalReserveData) return null; // Skip if data not found
-
-                // Find original index for color
+                if (!originalReserveData) return null;
                 const originalIndex = fetchedReserves.findIndex(r => r.name === investment.name);
-
                 return (
                   <ReserveInfo
                     key={investment.name}
-                    title={investment.name} // Use name from investment
+                    title={investment.name}
                     color={getInvestmentColor('reserve', originalIndex)}
-                    // Pass reserve-specific fields from originalReserveData
-                    reserveData={{
-                      total_borrowed: originalReserveData.total_borrowed,
-                      total_supplied: originalReserveData.total_supplied,
-                      optimal_usage_ratio: originalReserveData.optimal_usage_ratio
-                    }}
+                    reserveData={originalReserveData}
                   />
                 );
             })}
