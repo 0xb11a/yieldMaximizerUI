@@ -1,7 +1,6 @@
 'use client';
 
 import React from 'react';
-import { isAddress } from 'viem';
 import { AssetData } from '@/types'; 
 import { Address, formatUnits } from 'viem'; 
 
@@ -34,10 +33,6 @@ export default function WalletBalanceDisplay({
   const addressDisplayText = displayAddress
      ? `${displayAddress.substring(0, 6)}...${displayAddress.substring(displayAddress.length - 4)}`
      : 'N/A';
-
-  // Check overall loading/error state from the passed data
-  const isAnyLoading = balanceDisplayData.some(b => b.isLoading);
-  const isAnyError = balanceDisplayData.some(b => b.isError);
 
   return (
     <div className="card p-8 mb-12">
