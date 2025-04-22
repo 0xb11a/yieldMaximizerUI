@@ -14,10 +14,6 @@ import {
 import { getInvestmentColor } from '@/styles/colors';
 // Import Recharts components
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, TooltipProps } from 'recharts';
-// Import wagmi hooks
-import { useAccount, useConnect, useDisconnect, useBalance } from 'wagmi';
-import { injected } from 'wagmi/connectors'; // Import the connector
-import { formatEther } from 'viem'; // Import formatEther
 // Add NameType and ValueType imports
 import { NameType, ValueType } from 'recharts/types/component/DefaultTooltipContent';
 import logger from '@/utils/logger'; // Import the logger
@@ -39,25 +35,7 @@ interface AllocationItem {
 
 const INITIAL_ALLOCATION: AllocationItem[] = [];
 
-interface InvestmentCalculatorProps {
-  useDemo?: boolean;
-}
-
-export default function InvestmentCalculator({ useDemo = false }: InvestmentCalculatorProps) {
-  // Replace useState for connection with wagmi hooks
-  // const [isConnected, setIsConnected] = useState(false);
-  const { address, isConnected, isConnecting } = useAccount();
-  const { connect } = useConnect();
-  const { disconnect } = useDisconnect();
-  // Add useBalance hook
-  const { 
-    data: balanceData, 
-    isLoading: isBalanceLoading, 
-    isError: isBalanceError 
-  } = useBalance({
-    address: address, // Fetch balance for the connected address
-  });
-
+export default function InvestmentCalculator(/*{ useDemo = false }: InvestmentCalculatorProps*/) {
   const [isDistributed, setIsDistributed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [allocation, setAllocation] = useState<AllocationItem[]>(INITIAL_ALLOCATION);
@@ -69,12 +47,6 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
 
   // State to track client-side mounting
   const [isClient, setIsClient] = useState(false);
-
-  // Get initial demo funds from environment variable with fallback
-  // const initialDemoFundsEnv = process.env.NEXT_PUBLIC_DEMO_FUNDS;
-  // const INITIAL_DEMO_TOTAL_FUNDS = initialDemoFundsEnv && !isNaN(parseFloat(initialDemoFundsEnv)) 
-  //                          ? parseFloat(initialDemoFundsEnv) 
-  //                          : 500000; // Fallback value
 
   // State for dynamic demo funds - Initialize with a default value
   const [demoFundsAmount, setDemoFundsAmount] = useState<number>(10000); // Default to 10000
@@ -122,7 +94,7 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
     setIsClient(true);
   }, []);
 
-  // Updated handleDistribute - Two-step fetch process
+  // Updated handleDistribute - Always use demo logic
   const handleDistribute = async () => {
     setIsLoading(true);
     setError(null);
@@ -132,41 +104,9 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
     setFetchedReserves([]);
     setIsDistributed(false);
 
-    let totalFundsForCalc: number;
-    let walletAddressToUse: string;
-
-    // Determine total funds and wallet address
-    if (useDemo) {
-      totalFundsForCalc = demoFundsAmount;
-      // Use a placeholder/demo wallet address for fetching pool/reserve data
-      walletAddressToUse = process.env.NEXT_PUBLIC_DEMO_WALLET_ADDRESS || "0x0000000000000000000000000000000000000000"; 
-      logger.info('Running in Demo Mode', { totalFunds: totalFundsForCalc }); // Use logger
-    } else {
-      if (!isConnected || !address) {
-          setError('Please connect your wallet first.');
-          setIsLoading(false);
-          return;
-      }
-      walletAddressToUse = address;
-
-      if (!balanceData || isBalanceLoading || isBalanceError) {
-        setError('Could not fetch wallet balance or balance is zero.');
-        logger.error('Balance Error or Loading', { // Use logger
-          hasBalanceData: !!balanceData,
-          isBalanceLoading,
-          isBalanceError,
-          address: walletAddressToUse // Add context
-        });
-        setIsLoading(false);
-        return;
-      }
-      totalFundsForCalc = parseFloat(formatEther(balanceData.value));
-      if (totalFundsForCalc <= 0) {
-         setError('Wallet balance is zero. Please add funds.');
-         setIsLoading(false);
-         return;
-      }
-    }
+    const totalFundsForCalc: number = demoFundsAmount;
+    const walletAddressToUse: string = process.env.NEXT_PUBLIC_DEMO_WALLET_ADDRESS || "0x0000000000000000000000000000000000000000";
+    logger.info('Running in Demo Mode (Forced)', { totalFunds: totalFundsForCalc }); // Use logger
 
     try {
       // Step 1: Fetch Pool and Reserve Data
@@ -328,121 +268,56 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
       {/* <CustomTooltip /> */}
       <h1 className="text-3xl font-bold mb-8">Yield Maximizer</h1>
       
-      {/* Wallet Connection Section - Updated with hydration fix */}
+      {/* Always show Demo Funds Input and Distribute Button */}
       <div className="card p-8 mb-12">
-         <div className="flex flex-col gap-4">
-          <div className="flex justify-between items-center">
-            <div>
-              <h2 className="text-xl font-semibold mb-2">Wallet Connection</h2>
-              <p className="text-[#9CA3AF]">
-                {!isClient ? 'Loading...' : 
-                  isConnecting ? 'Connecting...' : 
-                  isConnected ? `Connected: ${address?.slice(0, 6)}...${address?.slice(-4)}` : 
-                  'Connect your wallet to start'
-                }
-              </p>
-            </div>
-            <button
-              onClick={() => {
-                if (isConnected) {
-                  disconnect();
-                } else {
-                  // Connect using the injected connector (e.g., Rabby/MetaMask)
-                  connect({ connector: injected() }); 
-                }
-              }}
-              // Disable button only if isConnecting OR if not mounted yet (optional, but good practice)
-              disabled={!isClient || isConnecting} 
-              className="px-6 py-3 bg-[#1E2633] hover:bg-[#2D3748] text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait"
-            >
-              {!isClient ? 'Loading...' : 
-                 isConnecting ? 'Connecting...' : 
-                 isConnected ? 'Disconnect' : 
-                 'Connect Wallet'
-              }
-            </button>
+          <div className="flex flex-col gap-4">
+              {/* Demo Funds Input */}
+              <div className="mt-4">
+                <label htmlFor="demoFundsInput" className="block text-sm font-medium text-[#9CA3AF] mb-1">
+                  Set Funds Amount ($)
+                </label>
+                <input
+                  type="number"
+                  id="demoFundsInput"
+                  value={demoFundsAmount.toString()}
+                  onChange={(e) => {
+                    const value = parseFloat(e.target.value);
+                    setDemoFundsAmount(isNaN(value) || value < 0 ? 0 : value);
+                  }}
+                  className="w-full px-3 py-2 bg-[#111827] border border-[#374151] rounded-md text-white focus:outline-none focus:ring-1 focus:ring-[#10B981] focus:border-[#10B981]"
+                  placeholder="Enter funds amount"
+                  min="0" // Optional: prevent negative values
+                />
+              </div>
+           
+              {/* Show Distribute button logic */}
+              <button
+                onClick={handleDistribute}
+                // Updated disable logic - only disable if loading
+                disabled={isLoading}
+                className={`w-full px-6 py-3 bg-[#10B981] hover:bg-[#059669] text-white rounded-lg transition-colors ${ 
+                  isLoading ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+              >
+                {isLoading ? 'Calculating...' : 'Calculate Optimal Yield'}
+              </button>
           </div>
-          {/* Demo Funds Input - Show only in demo mode */}
-          {isClient && useDemo && (
-            <div className="mt-4">
-              <label htmlFor="demoFundsInput" className="block text-sm font-medium text-[#9CA3AF] mb-1">
-                Set Demo Funds Amount ($)
-              </label>
-              <input
-                type="number"
-                id="demoFundsInput"
-                value={demoFundsAmount.toString()}
-                onChange={(e) => {
-                  const value = parseFloat(e.target.value);
-                  setDemoFundsAmount(isNaN(value) || value < 0 ? 0 : value);
-                }}
-                className="w-full px-3 py-2 bg-[#111827] border border-[#374151] rounded-md text-white focus:outline-none focus:ring-1 focus:ring-[#10B981] focus:border-[#10B981]"
-                placeholder="Enter demo funds amount"
-                min="0" // Optional: prevent negative values
-              />
-            </div>
-          )}
-          {/* Show Distribute button logic */}
-          {isClient && (useDemo || isConnected) && (
-            <button
-              onClick={handleDistribute}
-              // Updated disable logic
-              disabled={isLoading || (!useDemo && (!isConnected || isBalanceLoading || isBalanceError))}
-              className={`w-full px-6 py-3 bg-[#10B981] hover:bg-[#059669] text-white rounded-lg transition-colors ${ 
-                (isLoading || (!useDemo && (!isConnected || isBalanceLoading || isBalanceError))) 
-                 ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
-            >
-              {isLoading 
-                ? 'Calculating Distribution...' 
-                : (!useDemo && !isConnected) 
-                ? 'Connect Wallet to Distribute'
-                : (!useDemo && isBalanceLoading) 
-                ? 'Fetching Balance...' 
-                : (!useDemo && isBalanceError) 
-                ? 'Balance Error'
-                : `Distribute ${useDemo ? 'Demo ' : ''}Funds`
-              }
-            </button>
-           )}
-           {/* Show balance error only in non-demo mode */}
-           {!useDemo && isBalanceError && isClient && isConnected && (
-             <div className="text-red-500 text-sm mt-2">
-                Error fetching balance. Please try again.
-             </div>
-           )}
-           {error && (
-            <div className="text-red-500 text-sm mt-2">
-              {error}
-            </div>
-           )}
-        </div>
       </div>
+
+      {/* Error Display */}
+      {isClient && error && (
+        <div className="text-red-500 text-sm mt-2">
+          {error}
+        </div>
+      )}
 
       {/* Distribution and Allocation Section - Conditional rendering also checks isClient */}
       <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-8 transition-opacity duration-500 ${
-        isDistributed && (useDemo || (isClient && isConnected)) && allocation.length > 0 ? 'opacity-100' : 'opacity-0 h-0 overflow-hidden'
+        isDistributed && allocation.length > 0 ? 'opacity-100' : 'opacity-0 h-0 overflow-hidden'
       }`}>
         {/* Distribution Chart -> Now BarChart */}
         <div className="card p-8">
           <h2 className="text-xl font-semibold mb-2">Distribution</h2>
-          {/* Update Your Supply display for demo mode */}
-          {(useDemo || (isClient && isConnected)) && isDistributed && (
-             <p className="text-base text-white mb-4">
-               Your Supply:&nbsp;
-               <span className="font-semibold">
-                {useDemo 
-                 ? `$${(demoFundsAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Demo)`
-                 : isBalanceLoading 
-                 ? 'Loading...' 
-                 : isBalanceError 
-                 ? 'Error' 
-                 : balanceData 
-                 ? `${balanceData.formatted} ${balanceData.symbol}`
-                 : 'N/A'}
-               </span>
-             </p>
-          )}
           {/* Use ResponsiveContainer for BarChart */}
           <div style={{ width: '100%', height: 300 }}>
             <ResponsiveContainer>
@@ -580,7 +455,7 @@ export default function InvestmentCalculator({ useDemo = false }: InvestmentCalc
       </div>
 
       {/* Pool & Reserves Information - Updated Logic */}
-      {isDistributed && (useDemo || (isClient && isConnected)) && distribution && (fetchedPools.length > 0 || fetchedReserves.length > 0) && (
+      {isDistributed && distribution && (fetchedPools.length > 0 || fetchedReserves.length > 0) && (
         <>
           <h2 className="text-2xl font-bold mt-12 mb-6">Pools & Reserves Information</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 animate-fadeIn">

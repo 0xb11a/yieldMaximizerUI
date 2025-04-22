@@ -19,9 +19,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-minimal-pie-chart": "^9.1.0",
-    "recharts": "^2.15.2",
-    "viem": "^2.27.2",
-    "wagmi": "^2.14.16"
+    "recharts": "^2.15.2"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

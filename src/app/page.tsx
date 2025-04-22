@@ -1,17 +1,21 @@
 'use client';
 
-import { useState } from 'react';
+// Remove useState import if no longer needed (assuming it's not used elsewhere)
+// import { useState } from 'react'; 
 import Header from './components/Header';
 import InvestmentCalculator from './components/InvestmentCalculator';
 
 export default function Home() {
-  const [useDemo, setUseDemo] = useState(false);
+  // Remove useDemo state
+  // const [useDemo, setUseDemo] = useState(false);
 
   return (
     <div className="min-h-screen bg-[#111827]">
-      <Header onDemoChange={setUseDemo} />
+      {/* Remove onDemoChange prop from Header */}
+      <Header /> 
       <main>
-        <InvestmentCalculator useDemo={useDemo} />
+        {/* Remove useDemo prop from InvestmentCalculator */}
+        <InvestmentCalculator /> 
       </main>
       <footer className="border-t border-[#1E2633] py-8">
         <div className="container mx-auto px-8 flex justify-between items-center">
