@@ -1,4 +1,5 @@
 import { POOL_ADDRESSES, RESERVE_ADDRESSES, PoolAddress, ReserveAddress } from './poolsAndReserves';
+import logger from '@/utils/logger';
 
 /**
  * Represents a lending reserve with its key parameters
