@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import PoolInfo from './PoolInfo';
 import ReserveInfo from './ReserveInfo';
+import logger from '@/utils/logger';
 import {
   fetchOptimalAllocation,
   fetchPoolAndReserveData,
