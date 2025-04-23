@@ -25,12 +25,13 @@ const lvUsdcAsset: AssetData = {
   decimals: 6,
 };
 
-const iUsdcAsset: AssetData = {
-  address: '0x00a55649e597d463fd212fbe48a3b40f0e227d06',
-  symbol: 'iUSDC',
-  name: 'InitCapital USDC Supply',
-  decimals: 6,
-};
+// Remove inUSDC asset
+// const iUsdcAsset: AssetData = {
+//   address: '0x00A55649E597d463fD212fBE48a3B40f0E227d06',
+//   symbol: 'inUSDC', // Match symbol reported by useBalance
+//   name: 'InitCapital USDC Supply',
+//   decimals: 14, // Corrected decimals
+// };
 // ---
 
 export default function Home() {
@@ -72,45 +73,52 @@ export default function Home() {
     },
   });
 
-  // 3. InitCapital iUSDC Balance
-  const { 
-    data: iUsdcBalanceData, 
-    isError: iUsdcIsError, 
-    isLoading: iUsdcIsLoading 
-  } = useReadContract({
-    address: iUsdcAsset.address as Address,
-    abi: erc20Abi,
-    functionName: 'balanceOf',
-    args: validAddress ? [validAddress] : undefined,
-    query: { 
-      enabled: !!validAddress, 
-    },
-  });
+  // Remove InitCapital iUSDC Balance fetch
+  // const { 
+  //   data: iUsdcBalanceData, 
+  //   isError: iUsdcIsError, 
+  //   isLoading: iUsdcIsLoading 
+  // } = useBalance({
+  //   address: validAddress,
+  //   token: iUsdcAsset.address as Address, // Specify token for ERC20
+  //   query: { 
+  //     enabled: !!validAddress, 
+  //   },
+  // });
   // ---
 
   // --- Calculate Total Supply Effect ---
   useEffect(() => {
     const usdcBal = usdcBalanceData?.value ?? BigInt(0);
     const lvUsdcBal = (lvUsdcBalanceData as bigint) ?? BigInt(0);
-    const iUsdcBal = (iUsdcBalanceData as bigint) ?? BigInt(0);
+    // const iUsdcBal = iUsdcBalanceData?.value ?? BigInt(0); // Remove from calculation
 
-    // Check if all are loaded and no errors before summing
-    const allLoaded = !usdcIsLoading && !lvUsdcIsLoading && !iUsdcIsLoading;
-    const anyError = usdcIsError || lvUsdcIsError || iUsdcIsError;
+    // Log raw balance data for debugging
+    if (validAddress) {
+      console.log('--- Balance Data Update ---');
+      console.log('Address:', validAddress);
+      console.log('USDC Balance:', { value: usdcBalanceData?.value, isLoading: usdcIsLoading, isError: usdcIsError });
+      console.log('lvUSDC Balance:', { value: lvUsdcBalanceData, isLoading: lvUsdcIsLoading, isError: lvUsdcIsError });
+      // console.log('iUSDC Balance:', { value: iUsdcBalanceData?.value, isLoading: iUsdcIsLoading, isError: iUsdcIsError }); // Remove log
+    }
+
+    const allLoaded = !usdcIsLoading && !lvUsdcIsLoading; // Remove iUsdcIsLoading
+    const anyError = usdcIsError || lvUsdcIsError; // Remove iUsdcIsError
 
     if (validAddress && allLoaded && !anyError) {
-      const totalBigInt = usdcBal + lvUsdcBal + iUsdcBal;
+      const totalBigInt = usdcBal + lvUsdcBal; // Remove iUsdcBal
       // Assuming all relevant tokens share the same decimals (6 in this case)
       // If decimals differ, more complex formatting is needed.
       const formattedTotal = formatUnits(totalBigInt, usdcAsset.decimals); 
       setTotalSupplyValue(parseFloat(formattedTotal));
+      console.log('Total Supply Calculated:', parseFloat(formattedTotal));
     } else if (!validAddress) {
       // Reset total if address is cleared
       setTotalSupplyValue(0);
     }
 
     // Dependencies: run when address or any balance data changes
-  }, [validAddress, usdcBalanceData, lvUsdcBalanceData, iUsdcBalanceData, usdcIsLoading, lvUsdcIsLoading, iUsdcIsLoading, usdcIsError, lvUsdcIsError, iUsdcIsError]);
+  }, [validAddress, usdcBalanceData, lvUsdcBalanceData, usdcIsLoading, lvUsdcIsLoading, usdcIsError, lvUsdcIsError]); // Corrected dependencies
   // ---
 
   // --- Event Handlers ---
@@ -140,7 +148,7 @@ export default function Home() {
   const balanceDisplayData = [
     { ...usdcAsset, isLoading: usdcIsLoading, isError: usdcIsError, value: usdcBalanceData?.value },
     { ...lvUsdcAsset, isLoading: lvUsdcIsLoading, isError: lvUsdcIsError, value: lvUsdcBalanceData },
-    { ...iUsdcAsset, isLoading: iUsdcIsLoading, isError: iUsdcIsError, value: iUsdcBalanceData },
+    // { ...iUsdcAsset, isLoading: iUsdcIsLoading, isError: iUsdcIsError, value: iUsdcBalanceData?.value }, // Remove from display data
   ];
   // ---
 
