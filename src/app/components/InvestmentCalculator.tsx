@@ -16,7 +16,6 @@ import { getInvestmentColor } from '@/styles/colors';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, TooltipProps } from 'recharts';
 // Add NameType and ValueType imports
 import { NameType, ValueType } from 'recharts/types/component/DefaultTooltipContent';
-import logger from '@/utils/logger'; // Import the logger
 
 interface AllocationItem {
   name: string;
@@ -118,13 +117,14 @@ export default function InvestmentCalculator({ initialFunds = 0 }: InvestmentCal
 
     try {
       // Step 1: Fetch Pool and Reserve Data
-      logger.info('Fetching pool and reserve data', { address: walletAddressToUse }); // Use logger
+      console.log('Fetching pool and reserve data for address:', walletAddressToUse);
       const poolReserveData = await fetchPoolAndReserveData(walletAddressToUse);
       // Added console log for fetchPoolAndReserveData response
-      logger.info('<<< Raw Response from fetchPoolAndReserveData >>>', { poolReserveData }); // Use logger
+      console.log('<<< Raw Response from fetchPoolAndReserveData >>>:', poolReserveData);
       setFetchedPools(poolReserveData.pools);
       setFetchedReserves(poolReserveData.reserves);
-      logger.info('Fetched Pool/Reserve Data', { pools: poolReserveData.pools, reserves: poolReserveData.reserves }); // Use logger
+      console.log('Fetched Pools:', poolReserveData.pools);
+      console.log('Fetched Reserves:', poolReserveData.reserves);
 
       // Check if pools or reserves are empty after fetching
       if (poolReserveData.pools.length === 0 && poolReserveData.reserves.length === 0) {
@@ -134,7 +134,7 @@ export default function InvestmentCalculator({ initialFunds = 0 }: InvestmentCal
       }
 
       // Step 2: Fetch Optimal Allocation using data from Step 1
-      logger.info('Fetching optimal allocation', { totalFunds: totalFundsForCalc }); // Use logger
+      console.log('Fetching optimal allocation with total funds:', totalFundsForCalc);
       // Using the renamed function fetchOptimalAllocation
       const allocationData = await fetchOptimalAllocation(
           totalFundsForCalc,
@@ -143,7 +143,7 @@ export default function InvestmentCalculator({ initialFunds = 0 }: InvestmentCal
           1 // Example: Set min_allocation_percent to 1%, make this configurable if needed
       );
       // Added console log for fetchOptimalAllocation response
-      logger.info('<<< Raw Response from fetchOptimalAllocation >>>', { allocationData }); // Use logger
+      console.log('<<< Raw Response from fetchOptimalAllocation >>>:', allocationData);
       
       const newAllocation = calculateDistribution(allocationData);
       
@@ -163,11 +163,7 @@ export default function InvestmentCalculator({ initialFunds = 0 }: InvestmentCal
 
       } 
       setError(errorMessage);
-      logger.error('Distribution Process Error', { // Use logger
-        message: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-        originalError: err // Include the original error object if possible
-      });
+      console.error('Distribution Process Error:', err);
       // Keep state cleared
       setDistribution(null);
       setAllocation(INITIAL_ALLOCATION);
