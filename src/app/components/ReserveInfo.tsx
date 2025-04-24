@@ -1,5 +1,8 @@
 'use client';
 
+import React from 'react';
+import { Reserve } from '@/config/apiConfig'; // Assuming Reserve type is defined here
+
 // Add reserve-specific data interface
 interface ReserveSpecificData {
   total_borrowed?: number;
@@ -10,13 +13,25 @@ interface ReserveSpecificData {
 interface ReserveInfoProps {
   title: string;
   color: string;
-  reserveData?: ReserveSpecificData; // Add optional prop for reserve-specific data
+  reserveData: Reserve;
+  explorerUrl?: string; // <-- ADD PROP
 }
 
-export default function ReserveInfo({ title, color, reserveData }: ReserveInfoProps) {
+// Helper to format large numbers (can be shared)
+const formatNumber = (num: number): string => {
+  if (num >= 1_000_000) {
+    return `$${(num / 1_000_000).toFixed(2)}M`;
+  } else if (num >= 1_000) {
+    return `$${(num / 1_000).toFixed(1)}K`;
+  } else {
+    return `$${num.toFixed(2)}`;
+  }
+};
+
+export default function ReserveInfo({ title, color, reserveData, explorerUrl }: ReserveInfoProps) {
   // Helper to format APY (same as in PoolInfo)
-  // const formatApy = (apy: number | undefined) => 
-  //   apy !== undefined ? `${apy.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : 'N/A';
+  const formatApy = (apy: number | undefined) => 
+    apy !== undefined ? `${apy.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : 'N/A';
 
   // Helper to format currency amount
   const formatCurrency = (amount: number | undefined) => 
@@ -32,12 +47,31 @@ export default function ReserveInfo({ title, color, reserveData }: ReserveInfoPr
   const formatUtilization = (rate: number) => 
      `${rate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
 
+  const formattedTotalSupplied = formatNumber(reserveData.total_supplied ?? 0);
+  const formattedTotalBorrowed = formatNumber(reserveData.total_borrowed ?? 0);
+
+  const titleElement = (
+    <h3 className="text-lg font-semibold">{title}</h3>
+  );
+
   return (
     <div className="card transform transition-all duration-500 hover:scale-[1.02]">
       <div className="p-6 border-b border-[#1E2633]">
         <div className="flex items-center gap-3">
           <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
-          <h3 className="text-lg font-semibold">{title}</h3>
+          {/* Wrap title in link if URL exists */} 
+          {explorerUrl ? (
+            <a 
+               href={explorerUrl} 
+               target="_blank" 
+               rel="noopener noreferrer" 
+               className="hover:opacity-80 transition-opacity"
+            >
+              {titleElement}
+            </a>
+          ) : (
+            titleElement
+          )}
         </div>
       </div>
       <div className="p-6 space-y-2">
@@ -45,14 +79,14 @@ export default function ReserveInfo({ title, color, reserveData }: ReserveInfoPr
         {reserveData?.total_supplied !== undefined && (
           <div className="flex justify-between animate-fadeIn mt-1">
             <span className="text-sm text-[#9CA3AF]">Total Supplied</span>
-            <span className="text-sm text-white">{formatCurrency(reserveData.total_supplied)}</span>
+            <span className="text-sm text-white">{formattedTotalSupplied}</span>
           </div>
         )}
         {/* Total Borrowed */}
         {reserveData?.total_borrowed !== undefined && (
           <div className="flex justify-between animate-fadeIn mt-1">
             <span className="text-sm text-[#9CA3AF]">Total Borrowed</span>
-            <span className="text-sm text-white">{formatCurrency(reserveData.total_borrowed)}</span>
+            <span className="text-sm text-white">{formattedTotalBorrowed}</span>
           </div>
         )}
         {/* Utilization Rate */}

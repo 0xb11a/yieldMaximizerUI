@@ -756,49 +756,96 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
         )}
       </div>
 
-      {/* Pool & Reserves Information Section (conditionally rendered based on available data) */}
-      {showResults && (infoSectionData.pools.length > 0 || infoSectionData.reserves.length > 0) && (
+      {/* Pool & Reserves Information Section */}
+      {/* Condition: Show only when optimal allocation is calculated and available */}
+      {displayMode === 'optimal' && optimalDistribution && (fetchedPools.length > 0 || fetchedReserves.length > 0) && (
         <>
           <h2 className="text-xl font-bold mt-12 mb-6">Pools & Reserves Information</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 animate-fadeIn">
-            {/* Render PoolInfo for relevant pools */}
-            {(displayMode === 'optimal' ? infoSectionData.pools as Investment[] : currentYield.filter(i => i.type === 'pool'))
-                .map((item) => {
-                    const poolData = displayMode === 'optimal'
-                       ? fetchedPools.find(p => p.name === (item as Investment).name) // Cast item
-                       : (item as CurrentYieldItem).originalPoolData;
-                    if (!poolData) return null;
-                    const itemName = displayMode === 'optimal' ? (item as Investment).name : (item as CurrentYieldItem).name;
-                    const originalIndex = fetchedPools.findIndex(p => p.name === itemName);
-                    const color = getInvestmentColor('pool', originalIndex);
+            
+            {/* === START: Align Logic with Current Yield === */}
+            
+            {/* Iterate over pools included in optimal allocation */}
+            {optimalDistribution.investments
+              .filter(inv => inv.type === 'pool' && inv.allocation > 0)
+              .map((investment) => {
+                // 1. Find the corresponding AssetConfig 
+                const assetConfig = SUPPORTED_ASSETS.find(a => 
+                    a.apiType === 'pool' && 
+                    a.name.toLowerCase().includes(investment.name.toLowerCase())
+                );
+                if (!assetConfig) {
+                    console.warn(`Optimal Pool: Config not found for ${investment.name}`);
+                    return null; 
+                }
+
+                // 2. Find corresponding fetched data using config address (like current yield)
+                const poolData = fetchedPools.find(p => p.address === assetConfig.contractAddress); 
+                if (!poolData) {
+                     console.warn(`Optimal Pool: Fetched data not found for ${assetConfig.name} (Address: ${assetConfig.contractAddress})`);
+                     return null;
+                 }
+                
+                // 3. Use config details for display, lookup color using API name index
+                const displayTitle = assetConfig.name; 
+                const explorerUrl = assetConfig.explorerUrl;
+                const originalIndex = fetchedPools.findIndex(p => p.name === investment.name); // Color lookup still uses API name index
+                const color = getInvestmentColor('pool', originalIndex);
+                
                 return (
                   <PoolInfo
-                            key={`info-pool-${itemName}`}
-                            title={itemName}
-                            color={color}
-                            data={poolData}
+                    key={`info-pool-${displayTitle}`}
+                    title={displayTitle}
+                    color={color}
+                    data={poolData} 
+                    explorerUrl={explorerUrl}
                   />
                 );
             })}
-            {/* Render ReserveInfo for relevant reserves */}
-            {(displayMode === 'optimal' ? infoSectionData.reserves as Investment[] : currentYield.filter(i => i.type === 'reserve'))
-                .map((item) => {
-                    const reserveData = displayMode === 'optimal'
-                       ? fetchedReserves.find(r => r.name === (item as Investment).name) // Cast item
-                       : (item as CurrentYieldItem).originalReserveData;
-                    if (!reserveData) return null;
-                    const itemName = displayMode === 'optimal' ? (item as Investment).name : (item as CurrentYieldItem).name;
-                    const originalIndex = fetchedReserves.findIndex(r => r.name === itemName);
-                    const color = getInvestmentColor('reserve', originalIndex);
+
+            {/* Iterate over reserves included in optimal allocation */}
+            {optimalDistribution.investments
+              .filter(inv => inv.type === 'reserve' && inv.allocation > 0)
+              .map((investment) => {
+                 // 1. Find the corresponding AssetConfig
+                const assetConfig = SUPPORTED_ASSETS.find(a => 
+                    a.apiType === 'reserve' && 
+                    (a.name === investment.name || a.name.toLowerCase() === investment.name.toLowerCase())
+                );
+                 if (!assetConfig) {
+                    console.warn(`Optimal Reserve: Config not found for ${investment.name}`);
+                    return null; 
+                }
+
+                // 2. Find corresponding fetched data using config name (case-insensitive) OR address (like current yield)
+                const reserveData = fetchedReserves.find(r => 
+                    (r.name?.toLowerCase() === assetConfig.name.toLowerCase()) || 
+                    (r.address && r.address === assetConfig.contractAddress)
+                );
+                if (!reserveData) {
+                     console.warn(`Optimal Reserve: Fetched data not found for ${assetConfig.name} (Name: ${assetConfig.name}, Address: ${assetConfig.contractAddress})`);
+                     return null;
+                 }
+                
+                // 3. Use config details for display, lookup color using API name index
+                const displayTitle = assetConfig.name; 
+                const explorerUrl = assetConfig.explorerUrl;
+                const originalIndex = fetchedReserves.findIndex(r => r.name === investment.name); // Color lookup still uses API name index
+                const color = getInvestmentColor('reserve', originalIndex);
+                
                 return (
                   <ReserveInfo
-                            key={`info-reserve-${itemName}`}
-                            title={itemName}
-                            color={color}
-                            reserveData={reserveData} // Pass the fetched reserve data
+                    key={`info-reserve-${displayTitle}`}
+                    title={displayTitle}
+                    color={color}
+                    reserveData={reserveData} 
+                    explorerUrl={explorerUrl}
                   />
                 );
             })}
+            
+            {/* === END: Align Logic with Current Yield === */}
+
           </div>
         </>
       )}

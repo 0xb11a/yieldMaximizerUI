@@ -30,6 +30,9 @@ export interface AssetConfig {
   // Optional: Token representing the deposit/liquidity (e.g., lvUSDC, LP token)
   receiptToken?: TokenInfo;
 
+  // Optional: Explorer URL for the asset
+  explorerUrl?: string;
+
   // --- Balance Display Configuration --- 
   // Specifies which token balance to fetch and display in UI
   balanceDisplayConfig?: {
@@ -82,6 +85,8 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     underlyingTokens: [MANTLE_USDC], 
     receiptToken: MANTLE_LVUSDC,    
     apiType: 'reserve',
+    // Add explorer URL for the lvUSDC token
+    explorerUrl: 'https://mantlescan.xyz/token/0xf36afb467d1f05541d998bbbcd5f7167d67bd8fc', 
     // Display the balance of the receipt token (lvUSDC)
     balanceDisplayConfig: {
         tokenAddress: MANTLE_LVUSDC.address,
@@ -120,6 +125,8 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     underlyingTokens: [MANTLE_USDC],
     receiptToken: INITCAPITAL_INUSDC,
     apiType: 'reserve',
+    // Add explorer URL for the inUSDC token
+    explorerUrl: 'https://mantlescan.xyz/token/0x00a55649e597d463fd212fbe48a3b40f0e227d06', 
     // Display the balance by calling InitLens.getInitPosInfos
     balanceDisplayConfig: {
         tokenAddress: '0x4725e220163e0b90b40dd5405ee08718523dea78', // InitLens contract address
@@ -152,6 +159,8 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
         decimals: 18, // Placeholder decimals
     }, 
     apiType: 'pool',
+    // Add explorer URL for the pool contract
+    explorerUrl: 'https://mantlescan.xyz/address/0x48c1a89af1102cad358549e9bb16ae5f96cddfec', 
     /* // Temporarily disable balance display for this pool
     balanceDisplayConfig: {
         tokenAddress: '0x48c1a89af1102cad358549e9bb16ae5f96cddfec', // Assuming LP address = pool address
