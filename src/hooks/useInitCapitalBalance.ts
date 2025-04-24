@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAccount, useReadContracts } from 'wagmi';
+import { useReadContracts } from 'wagmi';
 import { Address, Abi } from 'viem';
 import initLensAbiJson from '../config/abis/InitLens.json';
 import posManagerAbiJson from '../config/abis/PosManager.json';
@@ -32,8 +32,7 @@ const findCollateralAmount = (pools: Address[], amts: bigint[]): bigint => {
 
 
 // --- Hook Definition ---
-export function useInitCapitalBalance() {
-  const { address: userAddress } = useAccount();
+export function useInitCapitalBalance(walletAddress: Address | undefined) {
   const [positionIds, setPositionIds] = useState<bigint[] | undefined>(undefined);
   const [balance, setBalance] = useState<bigint | undefined>(undefined);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -46,23 +45,23 @@ export function useInitCapitalBalance() {
         address: POS_MANAGER_ADDRESS,
         abi: posManagerAbi,
         functionName: 'getViewerPosIdsLength',
-        args: [userAddress!],
+        args: [walletAddress!],
       },
     ],
     query: {
-      enabled: !!userAddress, // Only run if userAddress is available
+      enabled: !!walletAddress, // Only run if walletAddress is available
     },
   });
 
   const positionLength = posLengthData?.[0]?.result as bigint | undefined;
 
   // 2. Prepare contracts to fetch all position IDs based on length
-  const positionIdContracts = positionLength !== undefined && userAddress
+  const positionIdContracts = positionLength !== undefined && walletAddress
     ? Array.from({ length: Number(positionLength) }, (_, i) => ({
         address: POS_MANAGER_ADDRESS,
         abi: posManagerAbi,
         functionName: 'getViewerPosIdsAt',
-        args: [userAddress, BigInt(i)],
+        args: [walletAddress, BigInt(i)],
       }))
     : [];
 
@@ -70,7 +69,7 @@ export function useInitCapitalBalance() {
   const { data: posIdsData, isLoading: isLoadingIds, isError: isErrorIds } = useReadContracts({
     contracts: positionIdContracts,
     query: {
-        enabled: !!userAddress && positionLength !== undefined && positionLength > 0, // Only run if we have address and length > 0
+        enabled: !!walletAddress && positionLength !== undefined && positionLength > 0, // Only run if we have address and length > 0
     },
   });
 
@@ -79,8 +78,11 @@ export function useInitCapitalBalance() {
       if (posIdsData) {
           const ids = posIdsData.map(item => item.result as bigint).filter(id => id !== undefined);
           setPositionIds(ids);
+      } else if (!walletAddress || positionLength === BigInt(0)) {
+          // Clear IDs if address removed or length is 0
+          setPositionIds(undefined);
       }
-  }, [posIdsData]);
+  }, [posIdsData, walletAddress, positionLength]);
 
   // 4. Fetch position info using InitLens for all collected IDs
   const { data: posInfosData, isLoading: isLoadingInfos, isError: isErrorInfos } = useReadContracts({
@@ -93,13 +95,13 @@ export function useInitCapitalBalance() {
       },
     ],
     query: {
-      enabled: !!userAddress && positionIds !== undefined && positionIds.length > 0, // Only run if we have address and IDs
+      enabled: !!walletAddress && positionIds !== undefined && positionIds.length > 0, // Only run if we have address and IDs
     },
   });
 
   // 5. Calculate total balance from position infos
   useEffect(() => {
-    if (posInfosData?.[0]?.result) {
+    if (posInfosData?.[0]?.result && positionIds && positionIds.length > 0) { // Check we actually queried for IDs
       // Use unknown[] for safer type handling
       const positionInfos = posInfosData[0].result as unknown[]; 
       let totalCollateral = BigInt(0);
@@ -143,13 +145,13 @@ export function useInitCapitalBalance() {
   
   // Reset state if user disconnects
   useEffect(() => {
-    if (!userAddress) {
+    if (!walletAddress) {
       setPositionIds(undefined);
       setBalance(undefined);
       setIsLoading(false);
       setIsError(false);
     }
-  }, [userAddress]);
+  }, [walletAddress]);
 
   return { balance, isLoading, isError };
 } 

@@ -4,8 +4,9 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useBalance, useReadContract, UseBalanceReturnType, UseReadContractReturnType } from 'wagmi';
 import { isAddress, formatUnits, Address } from 'viem';
 import { WalletBalance } from '@/types';
-import { AssetConfig, getAssetsForBalanceDisplay } from '@/config/assets';
+import { AssetConfig, getAssetsForBalanceDisplay, SUPPORTED_ASSETS } from '@/config/assets';
 import { useInitCapitalBalance } from '@/hooks/useInitCapitalBalance';
+import { getInvestmentColor } from '@/styles/colors';
 
 import Header from './components/Header';
 import InvestmentCalculator from '@/app/components/InvestmentCalculator';
@@ -22,6 +23,7 @@ interface BalanceDisplayItem {
   value: bigint | undefined | null;
   isLoading: boolean;
   isError: boolean;
+  color: string; // Add color property
   // Include underlying tokens for potential future use in display?
   // underlyingTokens?: TokenInfo[]; 
 }
@@ -51,15 +53,16 @@ function AssetBalanceFetcher({ assetId, walletAddress, balanceConfig, onBalanceU
 
   // Determine if the standard hooks should be active 
   const isStandardHookActive = !!walletAddress && !isInitCapital;
+  const isInitCapitalHookActive = !!walletAddress && isInitCapital; 
 
   // --- Hooks called UNCONDITIONALLY (but enabled conditionally) --- 
 
-  // Custom Hook for InitCapital (Always called)
+  // Custom Hook for InitCapital (Always called, but now takes walletAddress)
   const { 
       balance: initCapitalBalance, 
       isLoading: initCapitalLoading, 
       isError: initCapitalError 
-  } = useInitCapitalBalance(); 
+  } = useInitCapitalBalance(walletAddress); 
 
   // useBalance Hook (Conditionally enabled)
   const balanceResult: UseBalanceReturnType = useBalance({
@@ -85,16 +88,22 @@ function AssetBalanceFetcher({ assetId, walletAddress, balanceConfig, onBalanceU
 
   // Effect for InitCapital
   useEffect(() => {
-    if (isInitCapital) {
+    if (isInitCapital && isInitCapitalHookActive) { 
         const result: BalanceResult = {
             data: initCapitalBalance,
             isLoading: initCapitalLoading,
             isError: initCapitalError,
         };
         onBalanceUpdate(assetId, result);
+    } else if (isInitCapital && !isInitCapitalHookActive) {
+        const result: BalanceResult = { data: undefined, isLoading: false, isError: false }; 
+        onBalanceUpdate(assetId, result);
     }
-  // Depend ONLY on InitCapital hook results and the callback
-  }, [isInitCapital, initCapitalBalance, initCapitalLoading, initCapitalError, assetId, onBalanceUpdate]); 
+  }, [
+    isInitCapital, isInitCapitalHookActive, 
+    initCapitalBalance, initCapitalLoading, initCapitalError, 
+    assetId, onBalanceUpdate
+  ]); 
 
   // Effect for Standard Hooks (useBalance / useReadContract)
   useEffect(() => {
@@ -222,25 +231,18 @@ export default function Home() {
   const handleManualAddressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newAddress = e.target.value;
     setManualAddress(newAddress);
-    const isValid = newAddress === '' || isAddress(newAddress);
+    const isValid = isAddress(newAddress); // Check validity immediately
     setIsManualAddressValid(isValid);
-    if (!isValid) {
-        setDisplayAddress(undefined);
-        setBalanceResults({}); 
+
+    if (isValid) {
+      // If valid, set the display address immediately
+      setDisplayAddress(newAddress as Address);
+    } else {
+      // If invalid (or empty), clear the display address and results
+      setDisplayAddress(undefined);
+      setBalanceResults({});
     }
   };
-
-  const handleShowManualBalances = () => {
-     if (isAddress(manualAddress)) {
-        setDisplayAddress(manualAddress as Address);
-        setIsManualAddressValid(true);
-     } else {
-        setIsManualAddressValid(false);
-        setDisplayAddress(undefined);
-        setBalanceResults({});
-     }
-  };
-  // ---
 
   // --- Prepare Props for Components --- 
   // Prepare data specifically for WalletBalanceDisplay
@@ -250,6 +252,13 @@ export default function Home() {
       .map(asset => {
         const balanceConfig = asset.balanceDisplayConfig!;
         const result = balanceResults[asset.id] || { data: undefined, isLoading: true, isError: false };
+        
+        // Find original index and type for color calculation
+        const originalIndex = SUPPORTED_ASSETS.findIndex(a => a.id === asset.id);
+        // Use apiType from the main asset config, default to 'reserve' if missing
+        const assetType = asset.apiType || 'reserve'; 
+        const color = getInvestmentColor(assetType, originalIndex);
+
         return {
           // Data for display comes from balanceConfig and results
           id: asset.id,
@@ -260,6 +269,7 @@ export default function Home() {
           value: result.data,
           isLoading: result.isLoading,
           isError: result.isError,
+          color: color, // Pass the calculated color
         };
       });
   }, [assetsToDisplay, balanceResults]);
@@ -301,7 +311,6 @@ export default function Home() {
             manualAddress={manualAddress}
             isManualAddressValid={isManualAddressValid}
             onManualAddressChange={handleManualAddressChange}
-            onShowManualBalances={handleShowManualBalances}
             displayAddress={displayAddress}
             balanceDisplayData={balanceDisplayData} // Pass newly structured data
           />

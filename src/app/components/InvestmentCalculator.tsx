@@ -462,7 +462,7 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
   const infoSectionData = getInfoSectionData();
 
   return (
-    <div className="container mx-auto px-4 sm:px-8 py-12">
+    <div className="w-full">
        {/* Tooltip CSS */}
        <style>{`
         .tooltip-container {
@@ -514,16 +514,18 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
         }
        `}</style>
 
-      <h1 className="text-3xl font-bold mb-8">Yield Maximizer</h1>
-      
       {/* Button to trigger OPTIMAL calculation */}
-      <div className="mb-8">
+      <div className="mt-8 mb-8">
          <button
-            onClick={handleOptimalAllocation} // Use renamed handler
-            disabled={isLoading || initialFunds <= 0} // Disable if loading or no funds > 0
-            className={`w-full px-6 py-3 bg-[#10B981] hover:bg-[#059669] text-white rounded-lg transition-colors ${ 
-              (isLoading || initialFunds <= 0) ? 'opacity-50 cursor-not-allowed' : ''
-            }`}
+            onClick={handleOptimalAllocation}
+            disabled={isLoading || initialFunds <= 0}
+            className={`w-full px-6 py-3 bg-[#10B981] hover:bg-[#059669] text-white rounded-lg transition-all duration-150 ease-in-out shadow-md 
+                      font-semibold transform hover:scale-[1.02] active:scale-[0.98] 
+                      ${(isLoading || initialFunds <= 0) 
+                        ? 'opacity-50 cursor-not-allowed' 
+                        // Add glow animation class when enabled
+                        : 'animate-button-glow' 
+                      }`}
           >
             {isLoading && displayMode === 'optimal' ? 'Calculating Optimal...' : 'Calculate Optimal Yield'}
           </button>
@@ -537,8 +539,35 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
       )}
 
       {/* Loading Indicator for Current Yield */}
-      {isLoading && displayMode === 'current' && (
-         <div className="text-center text-gray-400 py-8">Loading Current Yield...</div>
+      {isLoading && displayMode !== 'optimal' && (
+        <div className="card p-4 sm:p-8 animate-pulse">
+          <div className="mb-6 h-6 flex items-center">
+             <span className="text-xl font-semibold text-gray-400">Calculating Current Wallet Yield...</span> 
+          </div>
+          <div className="space-y-1 lg:space-y-2">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className={`flex flex-col lg:flex-row lg:items-center py-2 border-b border-gray-800 last:border-b-0`}>
+                {/* Asset Name Skeleton */}
+                <div className="flex items-center gap-2 p-1 mb-1 lg:mb-0 lg:flex-[2]">
+                  <div className="w-3 h-3 rounded-full flex-shrink-0 bg-gray-700"/>
+                  <div className="h-4 bg-gray-700 rounded w-3/4"></div>
+                </div>
+                {/* Mobile Skeleton - Just show simplified lines */}
+                <div className="block lg:hidden pl-5 space-y-2 text-xs mt-1">
+                    <div className="h-3 bg-gray-700 rounded w-1/2"></div>
+                    <div className="h-3 bg-gray-700 rounded w-1/3"></div>
+                </div>
+                {/* Desktop Skeleton */}
+                <div className="hidden lg:flex flex-1 justify-end gap-2 lg:gap-3 p-1">
+                  <div className="h-4 bg-gray-700 rounded w-24"></div>
+                  <div className="h-4 bg-gray-700 rounded w-16"></div>
+                  <div className="h-4 bg-gray-700 rounded w-16"></div>
+                  <div className="h-4 bg-gray-700 rounded w-24"></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Results Section (Conditional Rendering) */}
@@ -656,10 +685,10 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
               <div className="hidden lg:flex items-center text-xs text-[#9CA3AF] font-semibold mb-2">
                 <div className="flex-[2] p-1"><span>Asset</span></div>
                 <div className="flex flex-1 justify-end gap-2 lg:gap-3 p-1">
-                  <span className="w-24 text-right">Balance ($)</span> {/* Changed header */}
+                  <span className="w-24 text-right">Balance</span>
                   <span className="w-16 text-right">Total APR</span>
                   <span className="w-16 text-right">Total APY</span>
-                  <span className="w-24 text-right">Yearly Profit ($)</span> {/* Changed header */}
+                  <span className="w-24 text-right">Yearly Profit</span>
                 </div>
               </div>
 
@@ -730,7 +759,7 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
       {/* Pool & Reserves Information Section (conditionally rendered based on available data) */}
       {showResults && (infoSectionData.pools.length > 0 || infoSectionData.reserves.length > 0) && (
         <>
-          <h2 className="text-2xl font-bold mt-12 mb-6">Pools & Reserves Information</h2>
+          <h2 className="text-xl font-bold mt-12 mb-6">Pools & Reserves Information</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 animate-fadeIn">
             {/* Render PoolInfo for relevant pools */}
             {(displayMode === 'optimal' ? infoSectionData.pools as Investment[] : currentYield.filter(i => i.type === 'pool'))
