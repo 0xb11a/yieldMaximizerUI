@@ -65,6 +65,13 @@ interface InvestmentCalculatorProps {
 }
 
 export default function InvestmentCalculator({ initialFunds = 0, walletBalances = [] }: InvestmentCalculatorProps) {
+  // Added log with BigInt replacer for stringify
+  console.log(
+    '>>> InvestmentCalculator received walletBalances:',
+    JSON.stringify(walletBalances, (key, value) =>
+      typeof value === 'bigint' ? value.toString() : value // Convert BigInts to strings
+    )
+  );
   const [displayMode, setDisplayMode] = useState<'idle' | 'current' | 'optimal'>('idle');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -116,158 +123,6 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
     return calculatedAllocation;
   };
 
-  // Fetches data and calculates current yield based on wallet balances
-  const calculateCurrentYield = async () => {
-    if (walletBalances.length === 0) {
-      setDisplayMode('idle'); // Nothing to show
-      return;
-    }
-
-    console.log("Calculating Current Yield for balances:", walletBalances);
-    setIsLoading(true);
-    setError(null);
-    setCurrentYield(INITIAL_CURRENT_YIELD); // Reset previous results
-    setCurrentTotalProfit(0);
-    setFetchedPools([]);
-    setFetchedReserves([]);
-    setDisplayMode('current'); // Set mode early
-
-    const walletAddressToUse: string = process.env.NEXT_PUBLIC_DEMO_WALLET_ADDRESS || "0x0000000000000000000000000000000000000000";
-
-    try {
-        // Step 1: Fetch Pool and Reserve Base Data
-        // console.log('Fetching pool and reserve base data for current yield:', walletAddressToUse); // Commented out
-        const poolReserveBaseData = await fetchPoolAndReserveData(walletAddressToUse);
-        // console.log('<<< Raw Response from fetchPoolAndReserveData (Current Yield) >>>:', poolReserveBaseData); // Commented out
-        // Store fetched data locally for price lookup etc.
-        const localFetchedPools = poolReserveBaseData.pools;
-        const localFetchedReserves = poolReserveBaseData.reserves;
-        setFetchedPools(localFetchedPools); // Update state for Info section if needed
-        setFetchedReserves(localFetchedReserves);
-
-        // Check if base data is empty
-        if (localFetchedPools.length === 0 && localFetchedReserves.length === 0) {
-            setError('No pools or reserves base data found.');
-            setIsLoading(false);
-            setDisplayMode('idle');
-            return;
-        }
-
-        // Step 2: Fetch Current APYs using calculate-optimal-allocation with total_funds = 0
-        // console.log('Fetching current APYs with total_funds = 0'); // Commented out
-        const apyData = await fetchOptimalAllocation(0, localFetchedPools, localFetchedReserves);
-        // console.log('<<< Raw Response from fetchOptimalAllocation (APY Data) >>>:', apyData); // Commented out
-
-        // Step 3: Map Wallet Balances, match with APY data, and Calculate Yield
-        let totalCalculatedProfit = 0;
-        const calculatedYield: CurrentYieldItem[] = walletBalances.map((balance) => {
-            
-            const assetConfig = SUPPORTED_ASSETS.find(asset => asset.name === balance.name);
-
-            if (!assetConfig) {
-                 console.warn(`No AssetConfig found for wallet balance: ${balance.name}`);
-                 // Return a minimal item to show the balance without yield info
-                 return {
-                    name: balance.name,
-                    symbol: balance.symbol,
-                    balance: parseFloat(formatUnits(balance.value, balance.decimals)),
-                    color: '#808080', // Gray color for unmatched
-                    type: 'reserve', // Default or unknown type
-                    expected_return: 0,
-                    expectedYearlyProfit: 0,
-                 } as CurrentYieldItem;
-            }
-            
-            // Find matching pool/reserve base data (for token_price)
-            let baseData: Pool | Reserve | undefined;
-            if (assetConfig.apiType === 'pool') {
-                baseData = localFetchedPools.find(p => p.address === assetConfig.contractAddress);
-            } else { 
-                baseData = localFetchedReserves.find(r => r.address === assetConfig.contractAddress);
-            }
-
-            // Find matching APY detail item(s) from Step 2 response
-            let matchedApyDetail: Investment | undefined;
-
-            if (assetConfig.source === 'merchantmoe' && assetConfig.apiType === 'pool') {
-                // Special case for Merchant Moe: match by API name "USDC-USDT"
-                matchedApyDetail = apyData.investments.find(detail =>
-                    detail.name === "USDC-USDT" && detail.type === 'pool'
-                );
-                 if (matchedApyDetail) {
-                    console.log(`Matched Merchant Moe pool using special case: API Name="USDC-USDT", Config Name="${assetConfig.name}"`);
-                 }
-            } else {
-                // Default case: match by assetConfig.name in lowercase
-                matchedApyDetail = apyData.investments.find(detail =>
-                    detail.name.toLowerCase() === assetConfig.name.toLowerCase() && detail.type === assetConfig.apiType
-                );
-            }
-
-             // Optional: Log if still no match (useful for debugging other assets)
-            if (!matchedApyDetail && assetConfig.name !== 'Wallet USDC') { // Don't warn for Wallet USDC, it's expected not to match
-                 console.warn(`No matching APY data found for config: ${assetConfig.name} (type: ${assetConfig.apiType}, source: ${assetConfig.source})`);
-            }
-
-            // Build the CurrentYieldItem
-            let itemData: Partial<CurrentYieldItem> = {
-                name: assetConfig.name,
-                symbol: balance.symbol, 
-                balance: parseFloat(formatUnits(balance.value, balance.decimals)),
-                color: '#8884d8',
-                type: assetConfig.type,
-                originalPoolData: assetConfig.apiType === 'pool' ? baseData as Pool : undefined,
-                originalReserveData: assetConfig.apiType === 'reserve' ? baseData as Reserve : undefined,
-                // Default APY/Profit values
-                expected_return: 0, 
-                reserve_apy: 0,
-                rewards_apy: 0,
-                expectedYearlyProfit: 0,
-            };
-            
-            const tokenPrice = baseData?.token_price ?? 1;
-            const balanceInUsd = (itemData.balance ?? 0) * tokenPrice;
-
-            if (matchedApyDetail) {
-                // Use APY data from the matched detail item
-                itemData.reserve_apy = matchedApyDetail.reserve_apy ?? 0;
-                itemData.rewards_apy = matchedApyDetail.rewards_apy ?? 0;
-                itemData.expected_return = itemData.reserve_apy + itemData.rewards_apy;
-                itemData.total_apr = matchedApyDetail.total_apr;
-                itemData.base_apr = matchedApyDetail.base_apr;
-                itemData.rewards_apr = matchedApyDetail.rewards_apr;
-                itemData.expectedYearlyProfit = balanceInUsd * (itemData.expected_return / 100);
-                totalCalculatedProfit += itemData.expectedYearlyProfit;
-                 console.log(`Profit calc for ${itemData.name}: BalanceUSD=${balanceInUsd}, TotalAPY=${itemData.expected_return}, Profit=${itemData.expectedYearlyProfit}`);
-            }
-
-            // Get color
-            const originalIndex = SUPPORTED_ASSETS.findIndex(a => a.id === assetConfig.id);
-            itemData.color = getInvestmentColor(assetConfig.type, originalIndex);
-            
-            return itemData as CurrentYieldItem; 
-        });
-
-        setCurrentYield(calculatedYield);
-        setCurrentTotalProfit(totalCalculatedProfit); 
-
-    } catch (err) {
-      let errorMessage = 'An unexpected error occurred calculating current yield';
-      if (err instanceof Error) {
-         errorMessage = `Error fetching data for current yield: ${err.message}`;
-      }
-      setError(errorMessage);
-      console.error('Current Yield Calculation Error:', err);
-      setCurrentYield(INITIAL_CURRENT_YIELD); // Clear results on error
-      setCurrentTotalProfit(0);
-      setFetchedPools([]);
-      setFetchedReserves([]);
-      setDisplayMode('idle'); // Reset mode on error
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   // useEffect to set isClient to true after mounting
   useEffect(() => {
     setIsClient(true);
@@ -276,19 +131,179 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
    // useEffect to trigger current yield calculation when walletBalances are available
    // and we are not already showing optimal results
    useEffect(() => {
-     // Only run if walletBalances is provided and has items, and we haven't explicitly calculated optimal
-     if (walletBalances.length > 0 && displayMode !== 'optimal') {
-       calculateCurrentYield();
-     } else if (walletBalances.length === 0 && displayMode === 'current') {
-       // If balances are removed, reset the current yield display
-       setDisplayMode('idle');
-       setCurrentYield(INITIAL_CURRENT_YIELD);
-       setCurrentTotalProfit(0);
-       setFetchedPools([]);
-       setFetchedReserves([]);
+     let isCancelled = false; // Cancellation flag for this effect run
+
+     const calculateCurrentYieldInternal = async () => {
+       if (walletBalances.length === 0) {
+         return; // Exit if no balances
+       }
+    
+       console.log("Calculating Current Yield for balances:", walletBalances);
+       setIsLoading(true); 
+       setError(null); // Clear previous errors
+       // We don't reset currentYield/totalProfit here to avoid clearing potentially valid results
+       // from a quick previous run before this one finishes.
+    
+       const walletAddressToUse: string = process.env.NEXT_PUBLIC_DEMO_WALLET_ADDRESS || "0x0000000000000000000000000000000000000000";
+    
+       try {
+         // Step 1: Fetch Pool and Reserve Base Data
+         const poolReserveBaseData = await fetchPoolAndReserveData(walletAddressToUse);
+         // --- Check cancellation after await --- 
+         if (isCancelled) {
+             console.log(">>> Yield calc cancelled after fetching base data");
+             return;
+         } 
+
+         const localFetchedPools = poolReserveBaseData.pools;
+         const localFetchedReserves = poolReserveBaseData.reserves;
+         // Update fetched data state to be used by this run and potentially optimal calc later
+         setFetchedPools(localFetchedPools); 
+         setFetchedReserves(localFetchedReserves);
+    
+         if (localFetchedPools.length === 0 && localFetchedReserves.length === 0) {
+             if (!isCancelled) setError('No pools or reserves base data found.');
+             return; // Exit if no base data found
+         }
+    
+         // Step 2: Fetch Current APYs 
+         const apyData = await fetchOptimalAllocation(0, localFetchedPools, localFetchedReserves);
+         // --- Check cancellation after await --- 
+         if (isCancelled) {
+             console.log(">>> Yield calc cancelled after fetching APY data");
+             return;
+         } 
+         
+         // Step 3: Map Wallet Balances
+         let totalCalculatedProfit = 0;
+         const calculatedYield: CurrentYieldItem[] = walletBalances.map((balance) => {
+             const assetConfig = SUPPORTED_ASSETS.find(asset => asset.name === balance.name);
+             if (!assetConfig) {
+                  console.warn(`No AssetConfig found for wallet balance: ${balance.name}`);
+                  return {
+                     name: balance.name,
+                     symbol: balance.symbol,
+                     balance: parseFloat(formatUnits(balance.value, balance.decimals)),
+                     color: '#808080', 
+                     type: 'reserve', 
+                     expected_return: 0,
+                     expectedYearlyProfit: 0,
+                  } as CurrentYieldItem;
+             }
+             let baseData: Pool | Reserve | undefined;
+             if (assetConfig.apiType === 'pool') {
+                 baseData = localFetchedPools.find(p => p.address === assetConfig.contractAddress); 
+             } else { 
+                  baseData = localFetchedReserves.find(r => 
+                      (r.name?.toLowerCase() === assetConfig.name.toLowerCase())
+                      || (r.address && r.address === assetConfig.contractAddress) 
+                  );
+             }
+             let matchedApyDetail: Investment | undefined;
+             if (assetConfig.source === 'merchantmoe' && assetConfig.apiType === 'pool') {
+                 matchedApyDetail = apyData.investments.find(detail =>
+                     detail.name === "USDC-USDT" && detail.type === 'pool'
+                 );
+                  // if (matchedApyDetail) { console.log(`Matched Merchant Moe pool...`); }
+             } else {
+                 matchedApyDetail = apyData.investments.find(detail =>
+                     detail.name.toLowerCase() === assetConfig.name.toLowerCase() && detail.type === assetConfig.apiType
+                 );
+             }
+             if (!matchedApyDetail && assetConfig.name !== 'Wallet USDC') { 
+                  console.warn(`No matching APY data found for config: ${assetConfig.name} ...`);
+             }
+             let itemData: Partial<CurrentYieldItem> = {
+                 name: assetConfig.name,
+                 symbol: balance.symbol, 
+                 balance: parseFloat(formatUnits(balance.value, balance.decimals)),
+                 color: '#8884d8',
+                 type: assetConfig.type,
+                 originalPoolData: assetConfig.apiType === 'pool' ? baseData as Pool : undefined,
+                 originalReserveData: assetConfig.apiType === 'reserve' ? baseData as Reserve : undefined,
+                 expected_return: 0, 
+                 reserve_apy: 0,
+                 rewards_apy: 0,
+                 expectedYearlyProfit: 0,
+             };
+             const tokenPrice = baseData?.token_price ?? 1; 
+             const balanceInUsd = (itemData.balance ?? 0) * tokenPrice;
+             itemData.balance = balanceInUsd; 
+             if (matchedApyDetail) {
+                 itemData.reserve_apy = matchedApyDetail.reserve_apy ?? 0;
+                 itemData.rewards_apy = matchedApyDetail.rewards_apy ?? 0;
+                 itemData.expected_return = itemData.reserve_apy + itemData.rewards_apy;
+                 itemData.total_apr = matchedApyDetail.total_apr;
+                 itemData.base_apr = matchedApyDetail.base_apr;
+                 itemData.rewards_apr = matchedApyDetail.rewards_apr;
+                 itemData.expectedYearlyProfit = balanceInUsd * (itemData.expected_return / 100);
+                 totalCalculatedProfit += itemData.expectedYearlyProfit;
+                 // console.log(`Profit calc for ${itemData.name}...`);
+             } 
+             const originalIndex = SUPPORTED_ASSETS.findIndex(a => a.id === assetConfig.id);
+             itemData.color = getInvestmentColor(assetConfig.type, originalIndex);
+             return itemData as CurrentYieldItem; 
+       });
+    
+       console.log(">>> Calculated Yield Array (final for this run):", JSON.stringify(calculatedYield, (k, v) => typeof v === 'bigint' ? v.toString() : v)); 
+    
+       // --- Set state only if this run was not cancelled --- 
+       if (!isCancelled) {
+           setCurrentYield(calculatedYield);
+           setCurrentTotalProfit(totalCalculatedProfit); 
+           if (calculatedYield.length > 0) {
+               // Only switch to current mode if we actually have yield data
+               setDisplayMode('current'); 
+           } else {
+               // If calculation resulted in empty list, go back to idle
+               setDisplayMode('idle'); 
+           }
+       }
+    
+     } catch (err) {
+       // Handle errors only if not cancelled
+       if (!isCancelled) {
+         console.error('Current Yield Calculation Error:', err);
+         let errorMessage = 'An unexpected error occurred calculating current yield';
+         if (err instanceof Error) {
+            errorMessage = `Error fetching data for current yield: ${err.message}`;
+         }
+         setError(errorMessage);
+         // Ensure state reflects the error
+         setDisplayMode('idle'); 
+         setCurrentYield(INITIAL_CURRENT_YIELD); 
+         setCurrentTotalProfit(0);
+       }
+     } finally {
+       // Set loading false only if this run finished (was not cancelled)
+       if (!isCancelled) {
+         setIsLoading(false);
+       }
      }
-     // eslint-disable-next-line react-hooks/exhaustive-deps
-   }, [walletBalances]); // Rerun only when walletBalances array reference changes
+   };
+
+   // --- Effect Execution Logic --- 
+   if (walletBalances.length > 0 && displayMode !== 'optimal') {
+       // Only trigger calculation if we have balances and are not showing optimal results
+       calculateCurrentYieldInternal();
+   } else if (walletBalances.length === 0 && displayMode === 'current') {
+       // If balances disappear while showing current yield, reset to idle
+       setDisplayMode('idle'); 
+       setCurrentYield(INITIAL_CURRENT_YIELD); 
+       setCurrentTotalProfit(0);
+       // Clear fetched data as well?
+       // setFetchedPools([]); 
+       // setFetchedReserves([]);
+   } // If displayMode is 'optimal' or 'idle' with no balances, do nothing
+
+   // --- Cleanup Function --- 
+   return () => {
+     isCancelled = true;
+     console.log(">>> Cleanup: Cancelling previous yield calculation run");
+     // Avoid setting isLoading false here, let the finally block handle it
+   };
+ // Dependencies: Rerun ONLY when balances change
+ }, [walletBalances]); 
 
   // Renamed handler for Optimal Allocation button click
   const handleOptimalAllocation = async () => {
