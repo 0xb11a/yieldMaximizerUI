@@ -5,6 +5,7 @@ import { useBalance, useReadContract, UseBalanceReturnType, UseReadContractRetur
 import { isAddress, formatUnits, Address } from 'viem';
 import { WalletBalance } from '@/types';
 import { AssetConfig, getAssetsForBalanceDisplay, TokenInfo } from '@/config/assets';
+import { useInitCapitalBalance } from '@/hooks/useInitCapitalBalance';
 
 import Header from './components/Header';
 import InvestmentCalculator from '@/app/components/InvestmentCalculator';
@@ -46,45 +47,60 @@ interface BalanceResult {
 
 function AssetBalanceFetcher({ assetId, walletAddress, balanceConfig, onBalanceUpdate }: AssetBalanceFetcherProps) {
   // Skip if balanceConfig is somehow undefined (shouldn't happen with filtering)
-  if (!balanceConfig) return null; 
+  if (!balanceConfig && assetId !== 'initcapital-usdc') return null; 
 
-  const commonQueryOptions = { enabled: !!walletAddress };
+  // --- Custom Hook for InitCapital --- 
+  const isInitCapital = assetId === 'initcapital-usdc';
+  const { 
+      balance: initCapitalBalance, 
+      isLoading: initCapitalLoading, 
+      isError: initCapitalError 
+  } = useInitCapitalBalance(); // Call the hook unconditionally, but use it conditionally
+
+  // --- Standard Hooks (conditionally enabled) --- 
+  const commonQueryOptions = { enabled: !!walletAddress && !isInitCapital }; // Disable if it's InitCapital
 
   // --- useBalance Hook ---
   const balanceResult: UseBalanceReturnType = useBalance({
     address: walletAddress,
-    token: balanceConfig.hook === 'useBalance' ? balanceConfig.tokenAddress : undefined,
+    token: balanceConfig?.hook === 'useBalance' && !isInitCapital ? balanceConfig.tokenAddress : undefined,
     query: {
       ...commonQueryOptions,
-      enabled: commonQueryOptions.enabled && balanceConfig.hook === 'useBalance',
+      enabled: commonQueryOptions.enabled && balanceConfig?.hook === 'useBalance',
     },
   });
 
   // --- useReadContract Hook ---
   const readContractResult: UseReadContractReturnType = useReadContract({
-    address: balanceConfig.hook === 'useReadContract' ? balanceConfig.tokenAddress : undefined,
-    abi: balanceConfig.hook === 'useReadContract' ? balanceConfig.args?.abi : undefined,
-    functionName: balanceConfig.hook === 'useReadContract' ? balanceConfig.args?.functionName : undefined,
-    args: balanceConfig.hook === 'useReadContract' && walletAddress ? [walletAddress] : undefined,
+    address: balanceConfig?.hook === 'useReadContract' && !isInitCapital ? balanceConfig.tokenAddress : undefined,
+    abi: balanceConfig?.hook === 'useReadContract' && !isInitCapital ? balanceConfig.args?.abi : undefined,
+    functionName: balanceConfig?.hook === 'useReadContract' && !isInitCapital ? balanceConfig.args?.functionName : undefined,
+    args: balanceConfig?.hook === 'useReadContract' && walletAddress && !isInitCapital ? [walletAddress] : undefined,
     query: {
       ...commonQueryOptions,
-      enabled: commonQueryOptions.enabled && balanceConfig.hook === 'useReadContract',
+      enabled: commonQueryOptions.enabled && balanceConfig?.hook === 'useReadContract',
     },
   });
 
-  // Destructure results to get potentially stable primitive values
+  // Destructure results for standard hooks
   const { data: balanceData, isLoading: balanceLoading, isError: balanceError } = balanceResult;
   const { data: readData, isLoading: readLoading, isError: readError } = readContractResult;
 
-  // Determine which result to use based on the config
+  // Determine which result to use based on the config OR if it's InitCapital
   const result = useMemo(() => {
-    if (balanceConfig.hook === 'useBalance') {
+    if (isInitCapital) {
+        return {
+            data: initCapitalBalance,
+            isLoading: initCapitalLoading,
+            isError: initCapitalError,
+        };
+    } else if (balanceConfig?.hook === 'useBalance') {
       return {
         data: balanceData?.value,
         isLoading: balanceLoading,
         isError: balanceError,
       };
-    } else if (balanceConfig.hook === 'useReadContract') {
+    } else if (balanceConfig?.hook === 'useReadContract') {
       return {
         data: readData as bigint | undefined,
         isLoading: readLoading,
@@ -92,17 +108,15 @@ function AssetBalanceFetcher({ assetId, walletAddress, balanceConfig, onBalanceU
       };
     }
     return { data: undefined, isLoading: false, isError: true }; // Fallback
-  // Depend on specific fields from hook results, not the objects themselves
-  }, [balanceConfig.hook, balanceData, balanceLoading, balanceError, readData, readLoading, readError]);
+  // Add dependencies for the custom hook
+  }, [isInitCapital, balanceConfig, balanceData, balanceLoading, balanceError, readData, readLoading, readError, initCapitalBalance, initCapitalLoading, initCapitalError]);
 
-  // Memoize the result object itself to ensure stable reference if content is same
-  // This might be redundant given the check in handleBalanceUpdate, but can help
+  // Memoize the result object
   const memoizedResult = useMemo(() => result, [result.data, result.isLoading, result.isError]);
 
   // Notify parent component about the result update
   useEffect(() => {
-    onBalanceUpdate(assetId, memoizedResult); // Pass memoized result
-  // Depend on the memoized result object's reference
+    onBalanceUpdate(assetId, memoizedResult);
   }, [assetId, memoizedResult, onBalanceUpdate]);
 
   return null;

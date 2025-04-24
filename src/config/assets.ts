@@ -1,6 +1,8 @@
 // src/config/assets.ts
 import { Address } from 'viem';
 import { erc20Abi } from '@/config/constants'; // Import ABI
+import initLensAbi from './abis/InitLens.json'; // Import InitLens ABI
+import posManagerAbi from './abis/PosManager.json'; // Import PosManager ABI
 
 // Represents basic info about a token
 export interface TokenInfo {
@@ -63,7 +65,7 @@ const MANTLE_USDT: TokenInfo = {
 const INITCAPITAL_INUSDC: TokenInfo = {
     address: '0x00a55649e597d463fd212fbe48a3b40f0e227d06',
     symbol: 'inUSDC',
-    decimals: 14, // Based on previous comments
+    decimals: 6, // CORRECTED: Decimals confirmed as 6
 };
 // --- Removed Placeholders for Merchant Moe Pool ---
 
@@ -118,13 +120,20 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     underlyingTokens: [MANTLE_USDC],
     receiptToken: INITCAPITAL_INUSDC,
     apiType: 'reserve',
-    // Display the balance of the receipt token (inUSDC)
+    // Display the balance by calling InitLens.getInitPosInfos
     balanceDisplayConfig: {
-        tokenAddress: INITCAPITAL_INUSDC.address,
-        tokenSymbol: INITCAPITAL_INUSDC.symbol,
-        tokenDecimals: INITCAPITAL_INUSDC.decimals,
-        // TODO: Verify correct hook for inUSDC (useBalance or useReadContract?)
-        hook: 'useBalance', 
+        tokenAddress: '0x4725e220163e0b90b40dd5405ee08718523dea78', // InitLens contract address
+        tokenSymbol: INITCAPITAL_INUSDC.symbol, // Still display as inUSDC
+        tokenDecimals: INITCAPITAL_INUSDC.decimals, // Use inUSDC decimals for display
+        hook: 'useReadContract',
+        args: { 
+            abi: initLensAbi,
+            functionName: 'getInitPosInfos', 
+            // NOTE: Actual call requires `_initPosIds` argument.
+            // The UI component needs to fetch these IDs separately using PosManager 
+            // (0x0e7401707CD08c03CDb53DAEF3295DDFb68BBa92) and provide them here.
+            // Then, it needs to process the returned PosInfo[] to sum the relevant USDC amounts.
+        },
     },
   },
   // --- Merchant Moe USDC/USDT Pool --- 

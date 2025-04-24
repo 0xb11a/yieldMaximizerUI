@@ -94,7 +94,7 @@ export default function WalletBalanceDisplay({
                            ) : balInfo.isLoading && displayAddress ? (
                              <span className="text-gray-500 text-xs animate-pulse">...</span>
                            ) : displayAddress ? (
-                             <span className="text-white font-mono">{parseFloat(formattedBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}</span>
+                             <span className="text-white font-mono">{parseFloat(formattedBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 10 })}</span>
                            ) : (
                              <span className="text-gray-500">-</span>
                            )}
