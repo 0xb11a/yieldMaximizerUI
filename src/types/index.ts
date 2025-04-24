@@ -11,4 +11,13 @@ export interface AssetData {
   address: string 
 }
 
+// Add this interface
+export interface WalletBalance {
+  address: string;
+  symbol: string;
+  name: string;
+  decimals: number;
+  value: bigint;
+}
+
 // You can add other shared types here as your project grows. 

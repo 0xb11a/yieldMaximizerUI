@@ -1,124 +1,198 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useBalance, useReadContract } from 'wagmi';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useBalance, useReadContract, UseBalanceReturnType, UseReadContractReturnType } from 'wagmi';
 import { isAddress, formatUnits, Address } from 'viem';
-import { AssetData } from '@/types';
-import { erc20Abi } from '@/config/constants';
+import { WalletBalance } from '@/types';
+import { AssetConfig, getAssetsForBalanceDisplay, TokenInfo } from '@/config/assets';
 
 import Header from './components/Header';
 import InvestmentCalculator from '@/app/components/InvestmentCalculator';
 import WalletBalanceDisplay from '@/app/components/WalletBalanceDisplay';
 
-// --- Define Assets within Page ---
-const usdcAsset: AssetData = {
-  address: '0x09bc4e0d864854c6afb6eb9a9cdf58ac190d0df9',
-  symbol: 'USDC',
-  name: 'Wallet USDC',
-  decimals: 6,
-};
+// Interface for the data passed to WalletBalanceDisplay
+// Represents the balance of a specific token configured for display
+interface BalanceDisplayItem {
+  id: string; // From original AssetConfig
+  name: string; // From original AssetConfig
+  symbol: string; // From balanceDisplayConfig
+  decimals: number; // From balanceDisplayConfig
+  address: Address; // From balanceDisplayConfig (token address being displayed)
+  value: bigint | undefined | null;
+  isLoading: boolean;
+  isError: boolean;
+  // Include underlying tokens for potential future use in display?
+  // underlyingTokens?: TokenInfo[]; 
+}
 
-const lvUsdcAsset: AssetData = {
-  address: '0xf36afb467d1f05541d998bbbcd5f7167d67bd8fc',
-  symbol: 'lvUSDC',
-  name: 'Lendle USDC Supply',
-  decimals: 6,
-};
-
-// Remove inUSDC asset
-// const iUsdcAsset: AssetData = {
-//   address: '0x00A55649E597d463fD212fBE48a3B40f0E227d06',
-//   symbol: 'inUSDC', // Match symbol reported by useBalance
-//   name: 'InitCapital USDC Supply',
-//   decimals: 14, // Corrected decimals
-// };
+// --- Remove Static Asset Definitions ---
+// const usdcAsset: AssetData = { ... };
+// const lvUsdcAsset: AssetData = { ... };
 // ---
 
+// --- Internal component to fetch balance for a single asset's display token ---
+interface AssetBalanceFetcherProps {
+  assetId: string; // Use ID to link results back
+  walletAddress: Address | undefined;
+  balanceConfig: AssetConfig['balanceDisplayConfig']; // Pass only the relevant config part
+  onBalanceUpdate: (assetId: string, result: BalanceResult) => void;
+}
+
+interface BalanceResult {
+  data: bigint | undefined | null;
+  isLoading: boolean;
+  isError: boolean;
+}
+
+function AssetBalanceFetcher({ assetId, walletAddress, balanceConfig, onBalanceUpdate }: AssetBalanceFetcherProps) {
+  // Skip if balanceConfig is somehow undefined (shouldn't happen with filtering)
+  if (!balanceConfig) return null; 
+
+  const commonQueryOptions = { enabled: !!walletAddress };
+
+  // --- useBalance Hook ---
+  const balanceResult: UseBalanceReturnType = useBalance({
+    address: walletAddress,
+    token: balanceConfig.hook === 'useBalance' ? balanceConfig.tokenAddress : undefined,
+    query: {
+      ...commonQueryOptions,
+      enabled: commonQueryOptions.enabled && balanceConfig.hook === 'useBalance',
+    },
+  });
+
+  // --- useReadContract Hook ---
+  const readContractResult: UseReadContractReturnType = useReadContract({
+    address: balanceConfig.hook === 'useReadContract' ? balanceConfig.tokenAddress : undefined,
+    abi: balanceConfig.hook === 'useReadContract' ? balanceConfig.args?.abi : undefined,
+    functionName: balanceConfig.hook === 'useReadContract' ? balanceConfig.args?.functionName : undefined,
+    args: balanceConfig.hook === 'useReadContract' && walletAddress ? [walletAddress] : undefined,
+    query: {
+      ...commonQueryOptions,
+      enabled: commonQueryOptions.enabled && balanceConfig.hook === 'useReadContract',
+    },
+  });
+
+  // Destructure results to get potentially stable primitive values
+  const { data: balanceData, isLoading: balanceLoading, isError: balanceError } = balanceResult;
+  const { data: readData, isLoading: readLoading, isError: readError } = readContractResult;
+
+  // Determine which result to use based on the config
+  const result = useMemo(() => {
+    if (balanceConfig.hook === 'useBalance') {
+      return {
+        data: balanceData?.value,
+        isLoading: balanceLoading,
+        isError: balanceError,
+      };
+    } else if (balanceConfig.hook === 'useReadContract') {
+      return {
+        data: readData as bigint | undefined,
+        isLoading: readLoading,
+        isError: readError,
+      };
+    }
+    return { data: undefined, isLoading: false, isError: true }; // Fallback
+  // Depend on specific fields from hook results, not the objects themselves
+  }, [balanceConfig.hook, balanceData, balanceLoading, balanceError, readData, readLoading, readError]);
+
+  // Memoize the result object itself to ensure stable reference if content is same
+  // This might be redundant given the check in handleBalanceUpdate, but can help
+  const memoizedResult = useMemo(() => result, [result.data, result.isLoading, result.isError]);
+
+  // Notify parent component about the result update
+  useEffect(() => {
+    onBalanceUpdate(assetId, memoizedResult); // Pass memoized result
+  // Depend on the memoized result object's reference
+  }, [assetId, memoizedResult, onBalanceUpdate]);
+
+  return null;
+}
+// --- End Internal Component ---
+
 export default function Home() {
-  // --- State Management in Page ---
+  // --- State Management --- 
   const [manualAddress, setManualAddress] = useState<string>('');
   const [displayAddress, setDisplayAddress] = useState<Address | undefined>(undefined);
   const [isManualAddressValid, setIsManualAddressValid] = useState<boolean>(true);
   const [totalSupplyValue, setTotalSupplyValue] = useState<number>(0);
+  const [balanceResults, setBalanceResults] = useState<Record<string, BalanceResult>>({});
   // ---
 
-  // --- Balance Fetching Hooks ---
-  const validAddress = displayAddress; // Use displayAddress directly
+  // Get assets configured for balance display
+  const assetsToDisplay = useMemo(() => getAssetsForBalanceDisplay(), []);
 
-  // 1. Wallet USDC Balance
-  const { 
-    data: usdcBalanceData, 
-    isError: usdcIsError, 
-    isLoading: usdcIsLoading 
-  } = useBalance({
-    address: validAddress,
-    token: usdcAsset.address as Address, // Specify token for ERC20 via useBalance
-    query: { 
-      enabled: !!validAddress, 
-    },
-  });
+  // Callback for AssetBalanceFetcher - MEMOIZED
+  const handleBalanceUpdate = useCallback((assetId: string, result: BalanceResult) => {
+    setBalanceResults(prev => {
+      // Avoid unnecessary updates if the data hasn't actually changed
+      if (prev[assetId]?.data === result.data && 
+          prev[assetId]?.isLoading === result.isLoading &&
+          prev[assetId]?.isError === result.isError) {
+        return prev;
+      }
+      return { ...prev, [assetId]: result };
+    });
+  }, []); // Empty dependency array because it only uses setBalanceResults
 
-  // 2. Lendle lvUSDC Balance
-  const { 
-    data: lvUsdcBalanceData, 
-    isError: lvUsdcIsError, 
-    isLoading: lvUsdcIsLoading 
-  } = useReadContract({
-    address: lvUsdcAsset.address as Address,
-    abi: erc20Abi,
-    functionName: 'balanceOf',
-    args: validAddress ? [validAddress] : undefined,
-    query: { 
-      enabled: !!validAddress, 
-    },
-  });
-
-  // Remove InitCapital iUSDC Balance fetch
-  // const { 
-  //   data: iUsdcBalanceData, 
-  //   isError: iUsdcIsError, 
-  //   isLoading: iUsdcIsLoading 
-  // } = useBalance({
-  //   address: validAddress,
-  //   token: iUsdcAsset.address as Address, // Specify token for ERC20
-  //   query: { 
-  //     enabled: !!validAddress, 
-  //   },
-  // });
-  // ---
+  // --- Derive Loading/Error Status --- 
+  const balanceStatus = useMemo(() => {
+      const assetsWithBalanceConfig = assetsToDisplay.filter(asset => asset.balanceDisplayConfig);
+      // Considered loaded only if we have a result object for the asset
+      const allLoaded = assetsWithBalanceConfig.every(asset => balanceResults[asset.id] && !balanceResults[asset.id].isLoading);
+      const anyError = assetsWithBalanceConfig.some(asset => balanceResults[asset.id]?.isError);
+      return { allLoaded, anyError };
+  // Recalculate only when results object reference changes or assets list changes
+  }, [assetsToDisplay, balanceResults]); 
 
   // --- Calculate Total Supply Effect ---
   useEffect(() => {
-    const usdcBal = usdcBalanceData?.value ?? BigInt(0);
-    const lvUsdcBal = (lvUsdcBalanceData as bigint) ?? BigInt(0);
-    // const iUsdcBal = iUsdcBalanceData?.value ?? BigInt(0); // Remove from calculation
+    // Use derived status flags
+    const { allLoaded, anyError } = balanceStatus; 
 
-    // Log raw balance data for debugging
-    if (validAddress) {
-      console.log('--- Balance Data Update ---');
-      console.log('Address:', validAddress);
-      console.log('USDC Balance:', { value: usdcBalanceData?.value, isLoading: usdcIsLoading, isError: usdcIsError });
-      console.log('lvUSDC Balance:', { value: lvUsdcBalanceData, isLoading: lvUsdcIsLoading, isError: lvUsdcIsError });
-      // console.log('iUSDC Balance:', { value: iUsdcBalanceData?.value, isLoading: iUsdcIsLoading, isError: iUsdcIsError }); // Remove log
-    }
+    if (displayAddress && allLoaded && !anyError) {
+      let totalUsdcEquivalentBigInt = BigInt(0);
+      let usdcDecimals = 6; // Default USDC decimals
 
-    const allLoaded = !usdcIsLoading && !lvUsdcIsLoading; // Remove iUsdcIsLoading
-    const anyError = usdcIsError || lvUsdcIsError; // Remove iUsdcIsError
+      // Find USDC config to get decimals reliably
+      const usdcConfig = assetsToDisplay.find(a => a.id === 'wallet-usdc');
+      if (usdcConfig?.balanceDisplayConfig) {
+          usdcDecimals = usdcConfig.balanceDisplayConfig.tokenDecimals;
+      }
 
-    if (validAddress && allLoaded && !anyError) {
-      const totalBigInt = usdcBal + lvUsdcBal; // Remove iUsdcBal
-      // Assuming all relevant tokens share the same decimals (6 in this case)
-      // If decimals differ, more complex formatting is needed.
-      const formattedTotal = formatUnits(totalBigInt, usdcAsset.decimals); 
-      setTotalSupplyValue(parseFloat(formattedTotal));
-      console.log('Total Supply Calculated:', parseFloat(formattedTotal));
-    } else if (!validAddress) {
-      // Reset total if address is cleared
+      assetsToDisplay.filter(asset => asset.balanceDisplayConfig).forEach(asset => {
+         const result = balanceResults[asset.id];
+         const value = result?.data ?? BigInt(0);
+
+         // --- Total Supply Calculation Logic --- 
+         // Sum balances assuming 1:1 conversion for receipt tokens to underlying USDC
+         // TODO: Implement accurate conversion using exchange rates for lvUSDC, inUSDC etc.
+         // TODO: Decide how to handle non-USDC based assets (e.g., LP tokens) - currently ignored.
+         if (asset.id === 'wallet-usdc' || asset.id === 'lendle-usdc' || asset.id === 'initcapital-usdc') {
+            // Assuming the displayed balance value (USDC, lvUSDC, inUSDC) can be treated as USDC equivalent for now
+            totalUsdcEquivalentBigInt += value;
+         } 
+         // --- End Logic --- 
+      });
+
+      const formattedTotal = formatUnits(totalUsdcEquivalentBigInt, usdcDecimals); 
+      const newTotalSupply = parseFloat(formattedTotal);
+      setTotalSupplyValue(newTotalSupply); // This is now the estimated total USDC equivalent
+
+      // --- Logging (Keep as is for debugging) ---
+      console.log('--- Balance Data Update (Aggregated) ---');
+      console.log('Address:', displayAddress);
+      assetsToDisplay.filter(asset => asset.balanceDisplayConfig).forEach(asset => {
+           console.log(`${asset.name} (${asset.balanceDisplayConfig?.tokenSymbol}):`, balanceResults[asset.id]);
+      });
+      console.log('Total Supply Calculated (USDC Equivalent Estimate):', newTotalSupply);
+      // --- End Logging ---
+
+    } else if (!displayAddress) {
       setTotalSupplyValue(0);
+      setBalanceResults({});
     }
-
-    // Dependencies: run when address or any balance data changes
-  }, [validAddress, usdcBalanceData, lvUsdcBalanceData, usdcIsLoading, lvUsdcIsLoading, usdcIsError, lvUsdcIsError]); // Corrected dependencies
+  // Update dependencies: use derived status flags instead of balanceResults directly
+  }, [displayAddress, assetsToDisplay, balanceStatus.allLoaded, balanceStatus.anyError]); 
   // ---
 
   // --- Event Handlers ---
@@ -129,6 +203,7 @@ export default function Home() {
     setIsManualAddressValid(isValid);
     if (!isValid) {
         setDisplayAddress(undefined);
+        setBalanceResults({}); 
     }
   };
 
@@ -139,21 +214,63 @@ export default function Home() {
      } else {
         setIsManualAddressValid(false);
         setDisplayAddress(undefined);
+        setBalanceResults({});
      }
   };
   // ---
 
-  // --- Prepare Props for WalletBalanceDisplay ---
-  // Pass individual balance details for display
-  const balanceDisplayData = [
-    { ...usdcAsset, isLoading: usdcIsLoading, isError: usdcIsError, value: usdcBalanceData?.value },
-    { ...lvUsdcAsset, isLoading: lvUsdcIsLoading, isError: lvUsdcIsError, value: lvUsdcBalanceData },
-    // { ...iUsdcAsset, isLoading: iUsdcIsLoading, isError: iUsdcIsError, value: iUsdcBalanceData?.value }, // Remove from display data
-  ];
+  // --- Prepare Props for Components --- 
+  // Prepare data specifically for WalletBalanceDisplay
+  const balanceDisplayData: BalanceDisplayItem[] = useMemo(() => {
+    return assetsToDisplay
+      .filter(asset => asset.balanceDisplayConfig) // Ensure config exists
+      .map(asset => {
+        const balanceConfig = asset.balanceDisplayConfig!;
+        const result = balanceResults[asset.id] || { data: undefined, isLoading: true, isError: false };
+        return {
+          // Data for display comes from balanceConfig and results
+          id: asset.id,
+          name: asset.name, // Use the main asset name
+          symbol: balanceConfig.tokenSymbol,
+          decimals: balanceConfig.tokenDecimals,
+          address: balanceConfig.tokenAddress, // Address of the token being displayed
+          value: result.data,
+          isLoading: result.isLoading,
+          isError: result.isError,
+        };
+      });
+  }, [assetsToDisplay, balanceResults]);
+
+  // Prepare data for InvestmentCalculator (WalletBalance format)
+  const validBalancesForCalc: WalletBalance[] = useMemo(() => {
+    return balanceDisplayData // Start from already prepared display data
+      .filter(bal => !bal.isLoading && !bal.isError && bal.value !== undefined && bal.value !== null && bal.value > BigInt(0))
+      .map(bal => ({
+        // Map from BalanceDisplayItem to WalletBalance
+        address: bal.address, // Use the token address from balanceDisplayConfig
+        symbol: bal.symbol,
+        name: bal.name, // Keep the main asset name
+        decimals: bal.decimals,
+        value: bal.value as bigint
+      }));
+  }, [balanceDisplayData]);
   // ---
 
   return (
     <div className="min-h-screen bg-[#111827]">
+      {/* Render Fetcher components for assets with display config */}
+      {assetsToDisplay
+        .filter(asset => asset.balanceDisplayConfig) // Ensure config exists before rendering fetcher
+        .map(asset => (
+          <AssetBalanceFetcher 
+            key={asset.id}
+            assetId={asset.id} // Pass assetId separately
+            walletAddress={displayAddress}
+            balanceConfig={asset.balanceDisplayConfig!} // Pass the specific balance config
+            onBalanceUpdate={handleBalanceUpdate} // Pass memoized callback
+          />
+      ))}
+
       <Header /> 
       <main className="text-[#F9FAFB]">
         <div className="container mx-auto px-4 sm:px-8 py-12">
@@ -163,10 +280,11 @@ export default function Home() {
             onManualAddressChange={handleManualAddressChange}
             onShowManualBalances={handleShowManualBalances}
             displayAddress={displayAddress}
-            balanceDisplayData={balanceDisplayData} // Pass formatted data for display
+            balanceDisplayData={balanceDisplayData} // Pass newly structured data
           />
           <InvestmentCalculator 
-            initialFunds={totalSupplyValue} // Pass the calculated total supply
+            initialFunds={totalSupplyValue} 
+            walletBalances={validBalancesForCalc} // Pass newly structured data
           />
         </div>
       </main>
