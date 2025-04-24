@@ -116,7 +116,7 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     type: 'reserve',
     source: 'initcapital',
     // API identifies this reserve by the underlying token address
-    contractAddress: MANTLE_USDC.address, // CORRECTED: Use underlying token address for API
+    contractAddress: INITCAPITAL_INUSDC.address, // CORRECTED: Use underlying token address for API
     underlyingTokens: [MANTLE_USDC],
     receiptToken: INITCAPITAL_INUSDC,
     apiType: 'reserve',
