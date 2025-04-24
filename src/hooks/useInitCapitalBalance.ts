@@ -5,7 +5,7 @@ import { useAccount, useReadContracts } from 'wagmi';
 import { Address, Abi } from 'viem';
 import initLensAbiJson from '../config/abis/InitLens.json';
 import posManagerAbiJson from '../config/abis/PosManager.json';
-import { AssetConfig, SUPPORTED_ASSETS } from '../config/assets';
+import { SUPPORTED_ASSETS } from '../config/assets';
 
 // --- Constants --- 
 const POS_MANAGER_ADDRESS: Address = '0x0e7401707CD08c03CDb53DAEF3295DDFb68BBa92';
@@ -39,10 +39,8 @@ export function useInitCapitalBalance() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isError, setIsError] = useState<boolean>(false);
 
-  console.log('[InitCap Hook] User Address:', userAddress);
-
   // 1. Fetch position ID length
-  const { data: posLengthData, isLoading: isLoadingLength, isError: isErrorLength, error: errorLength } = useReadContracts({
+  const { data: posLengthData, isLoading: isLoadingLength, isError: isErrorLength } = useReadContracts({
     contracts: [
       {
         address: POS_MANAGER_ADDRESS,
@@ -57,7 +55,6 @@ export function useInitCapitalBalance() {
   });
 
   const positionLength = posLengthData?.[0]?.result as bigint | undefined;
-  console.log('[InitCap Hook] Position Length Result:', { positionLength, isLoadingLength, isErrorLength, errorLength });
 
   // 2. Prepare contracts to fetch all position IDs based on length
   const positionIdContracts = positionLength !== undefined && userAddress
@@ -70,25 +67,23 @@ export function useInitCapitalBalance() {
     : [];
 
   // 3. Fetch all position IDs
-  const { data: posIdsData, isLoading: isLoadingIds, isError: isErrorIds, error: errorIds } = useReadContracts({
+  const { data: posIdsData, isLoading: isLoadingIds, isError: isErrorIds } = useReadContracts({
     contracts: positionIdContracts,
     query: {
         enabled: !!userAddress && positionLength !== undefined && positionLength > 0, // Only run if we have address and length > 0
     },
   });
-  console.log('[InitCap Hook] Position IDs Result:', { data: posIdsData, isLoadingIds, isErrorIds, errorIds });
 
   // Update positionIds state when data arrives
   useEffect(() => {
       if (posIdsData) {
           const ids = posIdsData.map(item => item.result as bigint).filter(id => id !== undefined);
-          console.log('[InitCap Hook] Setting Position IDs:', ids);
           setPositionIds(ids);
       }
   }, [posIdsData]);
 
   // 4. Fetch position info using InitLens for all collected IDs
-  const { data: posInfosData, isLoading: isLoadingInfos, isError: isErrorInfos, error: errorInfos } = useReadContracts({
+  const { data: posInfosData, isLoading: isLoadingInfos, isError: isErrorInfos } = useReadContracts({
     contracts: [
       {
         address: INIT_LENS_ADDRESS,
@@ -101,41 +96,33 @@ export function useInitCapitalBalance() {
       enabled: !!userAddress && positionIds !== undefined && positionIds.length > 0, // Only run if we have address and IDs
     },
   });
-  console.log('[InitCap Hook] Position Infos Result:', { data: posInfosData, isLoadingInfos, isErrorInfos, errorInfos });
 
   // 5. Calculate total balance from position infos
   useEffect(() => {
-    console.log('[InitCap Hook] Calculating Balance. PosInfos Data:', posInfosData, 'Position Length:', positionLength);
     if (posInfosData?.[0]?.result) {
-      const positionInfos = posInfosData[0].result as any[]; 
-      console.log('[InitCap Hook] Processing PositionInfos:', positionInfos);
+      // Use unknown[] for safer type handling
+      const positionInfos = posInfosData[0].result as unknown[]; 
       let totalCollateral = BigInt(0);
       
-      positionInfos.forEach((posInfo, index) => {
-          console.log(`[InitCap Hook] Processing posInfo[${index}]:`, posInfo);
-          console.log(`[InitCap Hook] posInfo[${index}] collInfo.pools:`, posInfo?.collInfo?.pools);
-          console.log(`[InitCap Hook] posInfo[${index}] collInfo.amts:`, posInfo?.collInfo?.amts);
-          console.log(`[InitCap Hook] Target Collateral Address: ${TARGET_COLLATERAL_ADDRESS}`); 
-          if (posInfo?.collInfo?.pools && posInfo?.collInfo?.amts) {
-              // *** Use the corrected helper function ***
-              const collateralAmountInPos = findCollateralAmount(posInfo.collInfo.pools, posInfo.collInfo.amts);
-              console.log(`[InitCap Hook] Found Collateral amount in posInfo[${index}]:`, collateralAmountInPos);
+      positionInfos.forEach((posInfo: unknown) => {
+          // Safely access nested properties using a more specific type assertion
+          const maybeCollInfo = (posInfo as { collInfo?: { pools?: Address[], amts?: bigint[] } })?.collInfo;
+          const pools = maybeCollInfo?.pools as Address[] | undefined;
+          const amts = maybeCollInfo?.amts as bigint[] | undefined;
+
+          // Check if pools and amts are valid arrays before proceeding
+          if (pools && amts && Array.isArray(pools) && Array.isArray(amts)) { 
+              const collateralAmountInPos = findCollateralAmount(pools, amts);
               totalCollateral += collateralAmountInPos;
-          } else {
-              console.log(`[InitCap Hook] Skipping posInfo[${index}] due to missing collInfo/pools/amts.`);
           }
       });
       
-      console.log('[InitCap Hook] Setting Balance:', totalCollateral);
       setBalance(totalCollateral); // Set the balance using the found collateral amount
       setIsError(false); 
     } else if (positionLength === BigInt(0) && !isLoadingLength && !isErrorLength) {
-      console.log('[InitCap Hook] Setting Balance to 0 (No positions)');
       setBalance(BigInt(0));
       setPositionIds([]); 
       setIsError(false); 
-    } else {
-        console.log('[InitCap Hook] Waiting for PosInfos data or length confirmation...');
     }
   }, [posInfosData, positionLength, isLoadingLength, isErrorLength]);
 
@@ -145,21 +132,18 @@ export function useInitCapitalBalance() {
     const waitingForIds = positionLength !== undefined && positionLength > 0 && positionIds === undefined && !isErrorIds;
     const waitingForInfos = positionIds !== undefined && positionIds.length > 0 && posInfosData === undefined && !isErrorInfos;
     const calculatedIsLoading = isLoadingLength || isLoadingIds || isLoadingInfos || waitingForIds || waitingForInfos;
-    console.log('[InitCap Hook] Setting isLoading:', calculatedIsLoading);
     setIsLoading(calculatedIsLoading);
   }, [isLoadingLength, isLoadingIds, isLoadingInfos, positionLength, positionIds, posInfosData, isErrorIds, isErrorInfos]);
 
   useEffect(() => {
+    // Use the specific error flags from the hooks
     const calculatedIsError = isErrorLength || isErrorIds || isErrorInfos;
-    // Also consider error if length > 0 but IDs/Infos are missing after loading finishes? (More complex)
-    console.log('[InitCap Hook] Setting isError:', calculatedIsError);
     setIsError(calculatedIsError);
   }, [isErrorLength, isErrorIds, isErrorInfos]);
   
   // Reset state if user disconnects
   useEffect(() => {
     if (!userAddress) {
-      console.log('[InitCap Hook] Resetting state due to user disconnect.');
       setPositionIds(undefined);
       setBalance(undefined);
       setIsLoading(false);

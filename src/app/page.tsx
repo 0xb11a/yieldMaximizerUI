@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useBalance, useReadContract, UseBalanceReturnType, UseReadContractReturnType } from 'wagmi';
 import { isAddress, formatUnits, Address } from 'viem';
 import { WalletBalance } from '@/types';
-import { AssetConfig, getAssetsForBalanceDisplay, TokenInfo } from '@/config/assets';
+import { AssetConfig, getAssetsForBalanceDisplay } from '@/config/assets';
 import { useInitCapitalBalance } from '@/hooks/useInitCapitalBalance';
 
 import Header from './components/Header';
@@ -46,79 +46,88 @@ interface BalanceResult {
 }
 
 function AssetBalanceFetcher({ assetId, walletAddress, balanceConfig, onBalanceUpdate }: AssetBalanceFetcherProps) {
-  // Skip if balanceConfig is somehow undefined (shouldn't happen with filtering)
-  if (!balanceConfig && assetId !== 'initcapital-usdc') return null; 
-
-  // --- Custom Hook for InitCapital --- 
+  // Determine if this fetcher is for the special InitCapital case
   const isInitCapital = assetId === 'initcapital-usdc';
+
+  // Determine if the standard hooks should be active 
+  const isStandardHookActive = !!walletAddress && !isInitCapital;
+
+  // --- Hooks called UNCONDITIONALLY (but enabled conditionally) --- 
+
+  // Custom Hook for InitCapital (Always called)
   const { 
       balance: initCapitalBalance, 
       isLoading: initCapitalLoading, 
       isError: initCapitalError 
-  } = useInitCapitalBalance(); // Call the hook unconditionally, but use it conditionally
+  } = useInitCapitalBalance(); 
 
-  // --- Standard Hooks (conditionally enabled) --- 
-  const commonQueryOptions = { enabled: !!walletAddress && !isInitCapital }; // Disable if it's InitCapital
-
-  // --- useBalance Hook ---
+  // useBalance Hook (Conditionally enabled)
   const balanceResult: UseBalanceReturnType = useBalance({
     address: walletAddress,
-    token: balanceConfig?.hook === 'useBalance' && !isInitCapital ? balanceConfig.tokenAddress : undefined,
+    token: balanceConfig?.hook === 'useBalance' ? balanceConfig.tokenAddress : undefined,
     query: {
-      ...commonQueryOptions,
-      enabled: commonQueryOptions.enabled && balanceConfig?.hook === 'useBalance',
+      enabled: isStandardHookActive && balanceConfig?.hook === 'useBalance',
     },
   });
 
-  // --- useReadContract Hook ---
+  // useReadContract Hook (Conditionally enabled)
   const readContractResult: UseReadContractReturnType = useReadContract({
-    address: balanceConfig?.hook === 'useReadContract' && !isInitCapital ? balanceConfig.tokenAddress : undefined,
-    abi: balanceConfig?.hook === 'useReadContract' && !isInitCapital ? balanceConfig.args?.abi : undefined,
-    functionName: balanceConfig?.hook === 'useReadContract' && !isInitCapital ? balanceConfig.args?.functionName : undefined,
-    args: balanceConfig?.hook === 'useReadContract' && walletAddress && !isInitCapital ? [walletAddress] : undefined,
+    address: balanceConfig?.hook === 'useReadContract' ? balanceConfig.tokenAddress : undefined,
+    abi: balanceConfig?.hook === 'useReadContract' ? balanceConfig.args?.abi : undefined,
+    functionName: balanceConfig?.hook === 'useReadContract' ? balanceConfig.args?.functionName : undefined,
+    args: balanceConfig?.hook === 'useReadContract' && walletAddress ? [walletAddress] : undefined,
     query: {
-      ...commonQueryOptions,
-      enabled: commonQueryOptions.enabled && balanceConfig?.hook === 'useReadContract',
+      enabled: isStandardHookActive && balanceConfig?.hook === 'useReadContract',
     },
   });
 
-  // Destructure results for standard hooks
-  const { data: balanceData, isLoading: balanceLoading, isError: balanceError } = balanceResult;
-  const { data: readData, isLoading: readLoading, isError: readError } = readContractResult;
+  // --- Separate Effects for Updating Parent --- 
 
-  // Determine which result to use based on the config OR if it's InitCapital
-  const result = useMemo(() => {
+  // Effect for InitCapital
+  useEffect(() => {
     if (isInitCapital) {
-        return {
+        const result: BalanceResult = {
             data: initCapitalBalance,
             isLoading: initCapitalLoading,
             isError: initCapitalError,
         };
-    } else if (balanceConfig?.hook === 'useBalance') {
-      return {
-        data: balanceData?.value,
-        isLoading: balanceLoading,
-        isError: balanceError,
-      };
-    } else if (balanceConfig?.hook === 'useReadContract') {
-      return {
-        data: readData as bigint | undefined,
-        isLoading: readLoading,
-        isError: readError,
-      };
+        onBalanceUpdate(assetId, result);
     }
-    return { data: undefined, isLoading: false, isError: true }; // Fallback
-  // Add dependencies for the custom hook
-  }, [isInitCapital, balanceConfig, balanceData, balanceLoading, balanceError, readData, readLoading, readError, initCapitalBalance, initCapitalLoading, initCapitalError]);
+  // Depend ONLY on InitCapital hook results and the callback
+  }, [isInitCapital, initCapitalBalance, initCapitalLoading, initCapitalError, assetId, onBalanceUpdate]); 
 
-  // Memoize the result object
-  const memoizedResult = useMemo(() => result, [result.data, result.isLoading, result.isError]);
-
-  // Notify parent component about the result update
+  // Effect for Standard Hooks (useBalance / useReadContract)
   useEffect(() => {
-    onBalanceUpdate(assetId, memoizedResult);
-  }, [assetId, memoizedResult, onBalanceUpdate]);
+    if (!isInitCapital && balanceConfig) {
+        let result: BalanceResult;
+        if (balanceConfig.hook === 'useBalance') {
+            result = {
+                data: balanceResult.data?.value,
+                isLoading: balanceResult.isLoading,
+                isError: balanceResult.isError,
+            };
+        } else if (balanceConfig.hook === 'useReadContract') {
+            result = {
+                data: readContractResult.data as bigint | undefined,
+                isLoading: readContractResult.isLoading,
+                isError: readContractResult.isError,
+            };
+        } else {
+            // Fallback if hook type is somehow wrong (shouldn't happen)
+            result = { data: undefined, isLoading: false, isError: true };
+        }
+        onBalanceUpdate(assetId, result);
+    }
+  // Depend on standard hook results, config, callback
+  }, [
+    isInitCapital, 
+    balanceConfig, 
+    balanceResult.data, balanceResult.isLoading, balanceResult.isError, 
+    readContractResult.data, readContractResult.isLoading, readContractResult.isError, 
+    assetId, onBalanceUpdate
+  ]);
 
+  // This component doesn't render anything itself
   return null;
 }
 // --- End Internal Component ---
@@ -205,7 +214,7 @@ export default function Home() {
       setTotalSupplyValue(0);
       setBalanceResults({});
     }
-  // Update dependencies: use derived status flags instead of balanceResults directly
+  // Revert dependencies: Use derived status flags to avoid infinite loops
   }, [displayAddress, assetsToDisplay, balanceStatus.allLoaded, balanceStatus.anyError]); 
   // ---
 

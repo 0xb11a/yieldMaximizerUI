@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import PoolInfo from './PoolInfo';
 import ReserveInfo from './ReserveInfo';
-import logger from '@/utils/logger';
 import {
   fetchOptimalAllocation,
   fetchPoolAndReserveData,
@@ -203,7 +202,7 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
              if (!matchedApyDetail && assetConfig.name !== 'Wallet USDC') { 
                   console.warn(`No matching APY data found for config: ${assetConfig.name} ...`);
              }
-             let itemData: Partial<CurrentYieldItem> = {
+             const itemData: Partial<CurrentYieldItem> = {
                  name: assetConfig.name,
                  symbol: balance.symbol, 
                  balance: parseFloat(formatUnits(balance.value, balance.decimals)),
@@ -287,8 +286,8 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
    return () => {
      isCancelled = true;
    };
- // Dependencies: Rerun ONLY when balances change
- }, [walletBalances]); 
+ // Dependencies: Rerun ONLY when balances change OR displayMode changes (as it's used in the initial check)
+ }, [walletBalances, displayMode]); 
 
   // Renamed handler for Optimal Allocation button click
   const handleOptimalAllocation = async () => {

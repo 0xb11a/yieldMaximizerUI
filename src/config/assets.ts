@@ -2,7 +2,7 @@
 import { Address } from 'viem';
 import { erc20Abi } from '@/config/constants'; // Import ABI
 import initLensAbi from './abis/InitLens.json'; // Import InitLens ABI
-import posManagerAbi from './abis/PosManager.json'; // Import PosManager ABI
+// import posManagerAbi from './abis/PosManager.json'; // Removed unused import
 
 // Represents basic info about a token
 export interface TokenInfo {
@@ -37,7 +37,7 @@ export interface AssetConfig {
     tokenSymbol: string;   // Symbol to display
     tokenDecimals: number; // Decimals for formatting
     hook: 'useBalance' | 'useReadContract'; // Hook to use
-    args?: { abi: any; functionName: string; }; // Args for useReadContract
+    args?: { abi: ReadonlyArray<unknown>; functionName: string; }; // Args for useReadContract - Replaced 'any' with ReadonlyArray<unknown>
   };
 
   // --- API Configuration --- 
