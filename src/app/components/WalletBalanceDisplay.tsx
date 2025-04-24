@@ -109,15 +109,15 @@ export default function WalletBalanceDisplay({
                       <div className="block lg:hidden pl-5 space-y-1 text-xs">
                           <div className="flex justify-between">
                               <span className='text-[#9CA3AF]'>Balance:</span>
-                              {balInfo.isError ? (
-                                <span className="text-red-500 text-xs">Error</span>
+                           {balInfo.isError ? (
+                             <span className="text-red-500 text-xs">Error</span>
                               ) : balInfo.isLoading ? (
-                                <span className="text-gray-500 text-xs animate-pulse">...</span>
-                              ) : (
+                             <span className="text-gray-500 text-xs animate-pulse">...</span>
+                           ) : (
                                 <span className="text-white font-medium">{`$${parseFloat(formattedBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 10 })}`}</span>
-                              )}
-                          </div>
-                      </div>
+                           )}
+                         </div>
+                       </div>
 
                       {/* --- Desktop View --- */} 
                       <div className="hidden lg:flex flex-1 justify-end gap-2 lg:gap-3 p-1">
@@ -136,7 +136,7 @@ export default function WalletBalanceDisplay({
                            {/* <div className="w-16 text-right"><span className="text-gray-500">-</span></div> */}
                            {/* <div className="w-24 text-right"><span className="text-gray-500">-</span></div> */}
                       </div>
-                    </div>
+                     </div>
                  );
               }) : (
                  <p className="text-sm text-gray-400 p-2 md:p-3">No balances found.</p> 

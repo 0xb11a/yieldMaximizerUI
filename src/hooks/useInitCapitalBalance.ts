@@ -101,8 +101,7 @@ export function useInitCapitalBalance(walletAddress: Address | undefined) {
 
   // 5. Calculate total balance from position infos
   useEffect(() => {
-    if (posInfosData?.[0]?.result && positionIds && positionIds.length > 0) { // Check we actually queried for IDs
-      // Use unknown[] for safer type handling
+    if (posInfosData?.[0]?.result && positionIds && positionIds.length > 0) { 
       const positionInfos = posInfosData[0].result as unknown[]; 
       let totalCollateral = BigInt(0);
       
@@ -119,14 +118,13 @@ export function useInitCapitalBalance(walletAddress: Address | undefined) {
           }
       });
       
-      setBalance(totalCollateral); // Set the balance using the found collateral amount
+      setBalance(totalCollateral); 
       setIsError(false); 
     } else if (positionLength === BigInt(0) && !isLoadingLength && !isErrorLength) {
       setBalance(BigInt(0));
-      setPositionIds([]); 
       setIsError(false); 
     }
-  }, [posInfosData, positionLength, isLoadingLength, isErrorLength]);
+  }, [posInfosData, positionLength, isLoadingLength, isErrorLength, positionIds]);
 
   // 6. Determine overall loading and error states
   useEffect(() => {

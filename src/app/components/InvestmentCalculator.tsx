@@ -11,7 +11,7 @@ import {
   type Reserve,
   type Investment
 } from '@/config/apiConfig';
-import { AssetConfig, SUPPORTED_ASSETS } from '@/config/assets';
+import { /* AssetConfig, */ SUPPORTED_ASSETS } from '@/config/assets';
 import { WalletBalance } from '@/types'; // Import WalletBalance
 import { getInvestmentColor } from '@/styles/colors';
 import { formatUnits } from 'viem'; // Import formatUnits
@@ -435,32 +435,6 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
   const displayTotalProfit = displayMode === 'current' ? currentTotalProfit : optimalDistribution?.total_profit;
   const showResults = !isLoading && displayMode !== 'idle' && displayAllocationData.length > 0;
 
-  // Determine which pools/reserves to show info for
-  const getInfoSectionData = () => {
-    if (!showResults) return { pools: [], reserves: [] };
-    if (displayMode === 'optimal' && optimalDistribution) {
-        // This part seems okay, uses optimal allocation data
-        return {
-            pools: optimalDistribution.investments.filter(inv => inv.type === 'pool' && inv.allocation > 0),
-            reserves: optimalDistribution.investments.filter(inv => inv.type === 'reserve' && inv.allocation > 0),
-        };
-    }
-    if (displayMode === 'current') {
-        // Filter based on items present in currentYield and get original data
-        // We need to match based on contractAddress from the config associated with currentYield item
-        const currentYieldConfigs = currentYield.map(item => SUPPORTED_ASSETS.find(a => a.name === item.name)).filter(Boolean) as AssetConfig[];
-        const poolAddressesToShow = currentYieldConfigs.filter(c => c.apiType === 'pool').map(c => c.contractAddress);
-        const reserveAddressesToShow = currentYieldConfigs.filter(c => c.apiType === 'reserve').map(c => c.contractAddress);
-        
-        return {
-            pools: fetchedPools.filter(p => p.address && poolAddressesToShow.includes(p.address)),
-            reserves: fetchedReserves.filter(r => r.address && reserveAddressesToShow.includes(r.address)),
-        };
-    }
-    return { pools: [], reserves: [] };
-  };
-  const infoSectionData = getInfoSectionData();
-
   return (
     <div className="w-full">
        {/* Tooltip CSS */}
@@ -760,7 +734,7 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
       {/* Condition: Show only when optimal allocation is calculated and available */}
       {displayMode === 'optimal' && optimalDistribution && (fetchedPools.length > 0 || fetchedReserves.length > 0) && (
         <>
-          <h2 className="text-xl font-bold mt-12 mb-6">Pools & Reserves Information</h2>
+          <h2 className="text-xl font-bold mt-8 mb-8">Pools & Reserves Information</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 animate-fadeIn">
             
             {/* === START: Align Logic with Current Yield === */}

@@ -19,17 +19,6 @@ interface PoolInfoProps {
   explorerUrl?: string; // <-- ADD PROP
 }
 
-// Helper to format large numbers
-const formatNumber = (num: number): string => {
-  if (num >= 1_000_000) {
-    return `$${(num / 1_000_000).toFixed(2)}M`;
-  } else if (num >= 1_000) {
-    return `$${(num / 1_000).toFixed(1)}K`;
-  } else {
-    return `$${num.toFixed(2)}`;
-  }
-};
-
 export default function PoolInfo({ title, color, data, explorerUrl }: PoolInfoProps) {
   // const formatApy = (apy: number | undefined) => 
   //   apy !== undefined ? `${apy.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : 'N/A';

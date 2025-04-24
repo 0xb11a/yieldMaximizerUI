@@ -3,13 +3,6 @@
 import React from 'react';
 import { Reserve } from '@/config/apiConfig'; // Assuming Reserve type is defined here
 
-// Add reserve-specific data interface
-interface ReserveSpecificData {
-  total_borrowed?: number;
-  total_supplied?: number;
-  optimal_usage_ratio?: number;
-}
-
 interface ReserveInfoProps {
   title: string;
   color: string;
@@ -29,14 +22,6 @@ const formatNumber = (num: number): string => {
 };
 
 export default function ReserveInfo({ title, color, reserveData, explorerUrl }: ReserveInfoProps) {
-  // Helper to format APY (same as in PoolInfo)
-  const formatApy = (apy: number | undefined) => 
-    apy !== undefined ? `${apy.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : 'N/A';
-
-  // Helper to format currency amount
-  const formatCurrency = (amount: number | undefined) => 
-    amount !== undefined ? `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A';
-
   // Calculate Utilization Rate
   const utilizationRate = 
     reserveData?.total_supplied && reserveData.total_supplied > 0 && reserveData?.total_borrowed !== undefined

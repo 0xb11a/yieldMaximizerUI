@@ -223,7 +223,7 @@ export default function Home() {
       setTotalSupplyValue(0);
       setBalanceResults({});
     }
-  // Revert dependencies: Use derived status flags to avoid infinite loops
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [displayAddress, assetsToDisplay, balanceStatus.allLoaded, balanceStatus.anyError]); 
   // ---
 
@@ -239,8 +239,8 @@ export default function Home() {
       setDisplayAddress(newAddress as Address);
     } else {
       // If invalid (or empty), clear the display address and results
-      setDisplayAddress(undefined);
-      setBalanceResults({});
+        setDisplayAddress(undefined);
+        setBalanceResults({}); 
     }
   };
 
