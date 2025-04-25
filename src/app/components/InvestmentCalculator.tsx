@@ -11,13 +11,11 @@ import {
   type Reserve,
   type Investment
 } from '@/config/apiConfig';
-import { /* AssetConfig, */ SUPPORTED_ASSETS } from '@/config/assets';
-import { WalletBalance } from '@/types'; // Import WalletBalance
+import { SUPPORTED_ASSETS } from '@/config/assets';
+import { WalletBalance } from '@/types'; 
 import { getInvestmentColor } from '@/styles/colors';
-import { formatUnits } from 'viem'; // Import formatUnits
-// Import Recharts components
+import { formatUnits } from 'viem'; 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, TooltipProps } from 'recharts';
-// Add NameType and ValueType imports
 import { NameType, ValueType } from 'recharts/types/component/DefaultTooltipContent';
 
 interface AllocationItem {
@@ -30,12 +28,11 @@ interface AllocationItem {
   expectedProfit: number;  // Added profit specific to this allocation
   reserve_apy?: number;   // APY from reserve/fees
   rewards_apy?: number;   // APY from rewards
-  total_apr?: number;     // Added field to match Investment type
-  base_apr?: number;      // Added
-  rewards_apr?: number;   // Added
+  total_apr?: number;     
+  base_apr?: number;      
+  rewards_apr?: number;   
 }
 
-// New interface for displaying current wallet yield
 interface CurrentYieldItem {
   name: string;
   symbol: string;
@@ -195,8 +192,10 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
                  );
                   // if (matchedApyDetail) { console.log(`Matched Merchant Moe pool...`); }
              } else {
+                 // Use apiName for matching if available, otherwise fall back to name (case-insensitive)
+                 const nameToMatch = (assetConfig.apiName ?? assetConfig.name).toLowerCase();
                  matchedApyDetail = apyData.investments.find(detail =>
-                     detail.name.toLowerCase() === assetConfig.name.toLowerCase() && detail.type === assetConfig.apiType
+                     detail.name.toLowerCase() === nameToMatch && detail.type === assetConfig.apiType
                  );
              }
              if (!matchedApyDetail && assetConfig.name !== 'Wallet USDC') { 
@@ -635,13 +634,23 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
                       );
                    })}
                 </div>
-                {/* Total Profit (Optimal) */}
-                {optimalDistribution && displayTotalProfit !== undefined && ( // Check optimalDistribution
-                   <div className="pt-4 mt-auto border-t border-[#1E2633]">
+                {/* Total Profit (Optimal vs Current) */}
+                {optimalDistribution && ( // Check optimalDistribution is available
+                   <div className="pt-4 mt-auto border-t border-[#1E2633] space-y-1">
+                      {/* Current Profit */}
+                      {currentTotalProfit > 0 && ( // Only show current if it's calculated and positive
+                         <div className="flex items-center justify-between text-sm">
+                            <span className="text-gray-400 flex-[2]">Current Yearly Profit</span>
+                            <span className="text-gray-400 text-right">
+                              ${currentTotalProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                         </div>
+                      )}
+                      {/* Optimal Profit */}
                       <div className="flex items-center justify-between">
-                         <span className="text-[#34D399] font-semibold flex-[2]">Total Optimal Profit</span>
+                         <span className="text-[#34D399] font-semibold flex-[2]">Optimal Yearly Profit</span>
                          <span className="text-[#34D399] font-semibold text-right">
-                           ${displayTotalProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                           ${optimalDistribution.total_profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                          </span>
                       </div>
                    </div>
@@ -651,22 +660,22 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
         )}
 
         {/* Current Yield specific: Allocation List */}
-        {displayMode === 'current' && (
+        {displayMode === 'current' && isClient && (
           <div className="card p-4 sm:p-8 flex flex-col">
-            <h2 className="text-xl font-semibold mb-2">Current Wallet Yield</h2>
-            <div className="space-y-1 lg:space-y-2 flex-grow">
+             <h2 className="text-xl font-semibold mb-2">Current Estimated Yield</h2>
+             <div className="space-y-1 lg:space-y-2 flex-grow">
               {/* Headers */}
               <div className="hidden lg:flex items-center text-xs text-[#9CA3AF] font-semibold mb-2">
                 <div className="flex-[2] p-1"><span>Asset</span></div>
                 <div className="flex flex-1 justify-end gap-2 lg:gap-3 p-1">
-                  <span className="w-24 text-right">Balance</span>
-                  <span className="w-16 text-right">Total APR</span>
+                  <span className="w-24 text-right">Balance ($)</span>
+                  <span className="w-16 text-right">Total APR</span> 
                   <span className="w-16 text-right">Total APY</span>
-                  <span className="w-24 text-right">Yearly Profit</span>
+                  <span className="w-24 text-right">Yearly Profit ($)</span> 
                 </div>
               </div>
-
               {/* Items */}
+              {currentYield.length === 0 && <p className="text-gray-400 text-sm">No current yield data to display. Your wallet may not hold assets in supported pools/reserves.</p>}
               {currentYield.map((item) => { // Use currentYield state
                 const formatPercent = (value: number | undefined) => value !== undefined ? `${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : '-';
                 const formatCurrency = (value: number | undefined) => value !== undefined ? `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-';
@@ -713,17 +722,17 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
             })} 
             </div>
             {/* Total Current Yearly Profit */}
-            {displayTotalProfit !== undefined && displayTotalProfit > 0 && (
+            {currentTotalProfit > 0 && ( // Use currentTotalProfit state directly
               <div className="pt-4 mt-auto border-t border-[#1E2633]">
                  <div className="flex items-center justify-between">
                   <span className="text-[#34D399] font-semibold flex-[2]">Total Estimated Yearly Profit</span>
                   <span className="text-[#34D399] font-semibold text-right">
-                    ${displayTotalProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    ${currentTotalProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 
                   </span>
                 </div>
               </div>
             )}
-             {displayTotalProfit !== undefined && displayTotalProfit <= 0 && currentYield.length > 0 && (
+             {currentTotalProfit <= 0 && currentYield.length > 0 && ( // Check state directly
                  <p className="text-sm text-gray-400 pt-4 mt-auto border-t border-[#1E2633]">No current yield detected for held assets.</p>
             )}
         </div>

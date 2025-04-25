@@ -46,6 +46,7 @@ export interface AssetConfig {
   // --- API Configuration --- 
   // Type to send to the /fetch-pool-data API
   apiType: 'pool' | 'reserve';
+  apiName?: string; // Optional: Name expected in the API response if different from display 'name'
 }
 
 
@@ -80,8 +81,7 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     name: 'Lendle USDC Reserve',
     type: 'reserve',
     source: 'lendle',
-    // API identifies this reserve by the underlying token address
-    contractAddress: MANTLE_LVUSDC.address, // CORRECTED: Use underlying token address for API
+    contractAddress: MANTLE_USDC.address, 
     underlyingTokens: [MANTLE_USDC], 
     receiptToken: MANTLE_LVUSDC,    
     apiType: 'reserve',
@@ -101,8 +101,8 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     id: 'wallet-usdc',
     name: 'Wallet USDC',
     type: 'reserve', 
-    source: 'lendle', 
-    contractAddress: MANTLE_USDC.address, // API identifier is the token itself
+    source: 'wallet', 
+    contractAddress: '0x0000000000000000000000000000000000000000',
     underlyingTokens: [MANTLE_USDC],
     receiptToken: undefined, 
     apiType: 'reserve', 
@@ -119,9 +119,10 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     id: 'initcapital-usdc',
     name: 'InitCapital USDC Reserve',
     type: 'reserve',
-    source: 'initcapital',
+    source: 'init',
+    apiName: 'init USDC Reserve',
     // API identifies this reserve by the underlying token address
-    contractAddress: INITCAPITAL_INUSDC.address, // CORRECTED: Use underlying token address for API
+    contractAddress: MANTLE_USDC.address,
     underlyingTokens: [MANTLE_USDC],
     receiptToken: INITCAPITAL_INUSDC,
     apiType: 'reserve',
@@ -174,31 +175,32 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
   // Removed example-pool and lendle-reserve-unknown placeholders
 ];
 
-// Helper function to get assets formatted for the /fetch-pool-data API
-// Passes the main contractAddress and apiType, ensuring uniqueness
+
 export const getAssetsForApi = (): { type: 'pool' | 'reserve'; address: Address; source?: string }[] => {
-  // Use a Map to ensure uniqueness based on type, address, and source
   const uniqueFunds = new Map<string, { type: 'pool' | 'reserve'; address: Address; source?: string }>();
 
   SUPPORTED_ASSETS.forEach(asset => {
+    // Skip assets with source 'wallet'
+    if (asset.source === 'wallet') {
+      return; // Skip this asset
+    }
+
     const fund = {
       type: asset.apiType,
-      address: asset.contractAddress, // Use the main contract address for the API call
+      address: asset.contractAddress, 
       source: asset.source,
     };
-    // Create a unique key
+    
     const key = `${fund.type}-${fund.address}-${fund.source ?? 'undefined'}`;
     if (!uniqueFunds.has(key)) {
       uniqueFunds.set(key, fund);
     }
   });
 
-  // Return an array of the unique fund objects
   return Array.from(uniqueFunds.values());
 };
 
-// Helper function to get assets that should be displayed in the balance list
-// Filters for assets that have a defined balanceDisplayConfig
+
 export const getAssetsForBalanceDisplay = (): AssetConfig[] => {
    return SUPPORTED_ASSETS.filter(asset => !!asset.balanceDisplayConfig);
 }; 
