@@ -16,9 +16,10 @@ interface PoolInfoProps {
   title: string;
   color: string;
   data: PoolDisplayData; 
+  explorerUrl?: string; // <-- ADD PROP
 }
 
-export default function PoolInfo({ title, color, data }: PoolInfoProps) {
+export default function PoolInfo({ title, color, data, explorerUrl }: PoolInfoProps) {
   // const formatApy = (apy: number | undefined) => 
   //   apy !== undefined ? `${apy.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : 'N/A';
 
@@ -32,12 +33,28 @@ export default function PoolInfo({ title, color, data }: PoolInfoProps) {
     ? data.reward_per_day * data.reward_token_price
     : undefined; // Or handle as 0 if preferred
 
+  const titleElement = (
+    <h3 className="text-lg font-semibold">{title}</h3>
+  );
+
   return (
     <div className="card transform transition-all duration-500 hover:scale-[1.02]">
       <div className="p-6 border-b border-[#1E2633]">
         <div className="flex items-center gap-3">
           <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
-          <h3 className="text-lg font-semibold">{title}</h3>
+          {/* Wrap title in link if URL exists */} 
+          {explorerUrl ? (
+            <a 
+               href={explorerUrl} 
+               target="_blank" 
+               rel="noopener noreferrer" 
+               className="hover:opacity-80 transition-opacity"
+            >
+              {titleElement}
+            </a>
+          ) : (
+            titleElement
+          )}
         </div>
       </div>
       <div className="p-6 space-y-2">

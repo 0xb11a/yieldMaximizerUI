@@ -4,7 +4,9 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useBalance, useReadContract, UseBalanceReturnType, UseReadContractReturnType } from 'wagmi';
 import { isAddress, formatUnits, Address } from 'viem';
 import { WalletBalance } from '@/types';
-import { AssetConfig, getAssetsForBalanceDisplay, TokenInfo } from '@/config/assets';
+import { AssetConfig, getAssetsForBalanceDisplay, SUPPORTED_ASSETS } from '@/config/assets';
+import { useInitCapitalBalance } from '@/hooks/useInitCapitalBalance';
+import { getInvestmentColor } from '@/styles/colors';
 
 import Header from './components/Header';
 import InvestmentCalculator from '@/app/components/InvestmentCalculator';
@@ -21,6 +23,7 @@ interface BalanceDisplayItem {
   value: bigint | undefined | null;
   isLoading: boolean;
   isError: boolean;
+  color: string; // Add color property
   // Include underlying tokens for potential future use in display?
   // underlyingTokens?: TokenInfo[]; 
 }
@@ -45,66 +48,95 @@ interface BalanceResult {
 }
 
 function AssetBalanceFetcher({ assetId, walletAddress, balanceConfig, onBalanceUpdate }: AssetBalanceFetcherProps) {
-  // Skip if balanceConfig is somehow undefined (shouldn't happen with filtering)
-  if (!balanceConfig) return null; 
+  // Determine if this fetcher is for the special InitCapital case
+  const isInitCapital = assetId === 'initcapital-usdc';
 
-  const commonQueryOptions = { enabled: !!walletAddress };
+  // Determine if the standard hooks should be active 
+  const isStandardHookActive = !!walletAddress && !isInitCapital;
+  const isInitCapitalHookActive = !!walletAddress && isInitCapital; 
 
-  // --- useBalance Hook ---
+  // --- Hooks called UNCONDITIONALLY (but enabled conditionally) --- 
+
+  // Custom Hook for InitCapital (Always called, but now takes walletAddress)
+  const { 
+      balance: initCapitalBalance, 
+      isLoading: initCapitalLoading, 
+      isError: initCapitalError 
+  } = useInitCapitalBalance(walletAddress); 
+
+  // useBalance Hook (Conditionally enabled)
   const balanceResult: UseBalanceReturnType = useBalance({
     address: walletAddress,
-    token: balanceConfig.hook === 'useBalance' ? balanceConfig.tokenAddress : undefined,
+    token: balanceConfig?.hook === 'useBalance' ? balanceConfig.tokenAddress : undefined,
     query: {
-      ...commonQueryOptions,
-      enabled: commonQueryOptions.enabled && balanceConfig.hook === 'useBalance',
+      enabled: isStandardHookActive && balanceConfig?.hook === 'useBalance',
     },
   });
 
-  // --- useReadContract Hook ---
+  // useReadContract Hook (Conditionally enabled)
   const readContractResult: UseReadContractReturnType = useReadContract({
-    address: balanceConfig.hook === 'useReadContract' ? balanceConfig.tokenAddress : undefined,
-    abi: balanceConfig.hook === 'useReadContract' ? balanceConfig.args?.abi : undefined,
-    functionName: balanceConfig.hook === 'useReadContract' ? balanceConfig.args?.functionName : undefined,
-    args: balanceConfig.hook === 'useReadContract' && walletAddress ? [walletAddress] : undefined,
+    address: balanceConfig?.hook === 'useReadContract' ? balanceConfig.tokenAddress : undefined,
+    abi: balanceConfig?.hook === 'useReadContract' ? balanceConfig.args?.abi : undefined,
+    functionName: balanceConfig?.hook === 'useReadContract' ? balanceConfig.args?.functionName : undefined,
+    args: balanceConfig?.hook === 'useReadContract' && walletAddress ? [walletAddress] : undefined,
     query: {
-      ...commonQueryOptions,
-      enabled: commonQueryOptions.enabled && balanceConfig.hook === 'useReadContract',
+      enabled: isStandardHookActive && balanceConfig?.hook === 'useReadContract',
     },
   });
 
-  // Destructure results to get potentially stable primitive values
-  const { data: balanceData, isLoading: balanceLoading, isError: balanceError } = balanceResult;
-  const { data: readData, isLoading: readLoading, isError: readError } = readContractResult;
+  // --- Separate Effects for Updating Parent --- 
 
-  // Determine which result to use based on the config
-  const result = useMemo(() => {
-    if (balanceConfig.hook === 'useBalance') {
-      return {
-        data: balanceData?.value,
-        isLoading: balanceLoading,
-        isError: balanceError,
-      };
-    } else if (balanceConfig.hook === 'useReadContract') {
-      return {
-        data: readData as bigint | undefined,
-        isLoading: readLoading,
-        isError: readError,
-      };
-    }
-    return { data: undefined, isLoading: false, isError: true }; // Fallback
-  // Depend on specific fields from hook results, not the objects themselves
-  }, [balanceConfig.hook, balanceData, balanceLoading, balanceError, readData, readLoading, readError]);
-
-  // Memoize the result object itself to ensure stable reference if content is same
-  // This might be redundant given the check in handleBalanceUpdate, but can help
-  const memoizedResult = useMemo(() => result, [result.data, result.isLoading, result.isError]);
-
-  // Notify parent component about the result update
+  // Effect for InitCapital
   useEffect(() => {
-    onBalanceUpdate(assetId, memoizedResult); // Pass memoized result
-  // Depend on the memoized result object's reference
-  }, [assetId, memoizedResult, onBalanceUpdate]);
+    if (isInitCapital && isInitCapitalHookActive) { 
+        const result: BalanceResult = {
+            data: initCapitalBalance,
+            isLoading: initCapitalLoading,
+            isError: initCapitalError,
+        };
+        onBalanceUpdate(assetId, result);
+    } else if (isInitCapital && !isInitCapitalHookActive) {
+        const result: BalanceResult = { data: undefined, isLoading: false, isError: false }; 
+        onBalanceUpdate(assetId, result);
+    }
+  }, [
+    isInitCapital, isInitCapitalHookActive, 
+    initCapitalBalance, initCapitalLoading, initCapitalError, 
+    assetId, onBalanceUpdate
+  ]); 
 
+  // Effect for Standard Hooks (useBalance / useReadContract)
+  useEffect(() => {
+    if (!isInitCapital && balanceConfig) {
+        let result: BalanceResult;
+        if (balanceConfig.hook === 'useBalance') {
+            result = {
+                data: balanceResult.data?.value,
+                isLoading: balanceResult.isLoading,
+                isError: balanceResult.isError,
+            };
+        } else if (balanceConfig.hook === 'useReadContract') {
+            result = {
+                data: readContractResult.data as bigint | undefined,
+                isLoading: readContractResult.isLoading,
+                isError: readContractResult.isError,
+            };
+        } else {
+            // Fallback if hook type is somehow wrong (shouldn't happen)
+            result = { data: undefined, isLoading: false, isError: true };
+        }
+        onBalanceUpdate(assetId, result);
+    }
+  // Depend on standard hook results, config, callback
+  }, [
+    isInitCapital, 
+    balanceConfig, 
+    balanceResult.data, balanceResult.isLoading, balanceResult.isError, 
+    readContractResult.data, readContractResult.isLoading, readContractResult.isError, 
+    assetId, onBalanceUpdate
+  ]);
+
+  // This component doesn't render anything itself
   return null;
 }
 // --- End Internal Component ---
@@ -191,7 +223,7 @@ export default function Home() {
       setTotalSupplyValue(0);
       setBalanceResults({});
     }
-  // Update dependencies: use derived status flags instead of balanceResults directly
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [displayAddress, assetsToDisplay, balanceStatus.allLoaded, balanceStatus.anyError]); 
   // ---
 
@@ -199,25 +231,18 @@ export default function Home() {
   const handleManualAddressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newAddress = e.target.value;
     setManualAddress(newAddress);
-    const isValid = newAddress === '' || isAddress(newAddress);
+    const isValid = isAddress(newAddress); // Check validity immediately
     setIsManualAddressValid(isValid);
-    if (!isValid) {
+
+    if (isValid) {
+      // If valid, set the display address immediately
+      setDisplayAddress(newAddress as Address);
+    } else {
+      // If invalid (or empty), clear the display address and results
         setDisplayAddress(undefined);
         setBalanceResults({}); 
     }
   };
-
-  const handleShowManualBalances = () => {
-     if (isAddress(manualAddress)) {
-        setDisplayAddress(manualAddress as Address);
-        setIsManualAddressValid(true);
-     } else {
-        setIsManualAddressValid(false);
-        setDisplayAddress(undefined);
-        setBalanceResults({});
-     }
-  };
-  // ---
 
   // --- Prepare Props for Components --- 
   // Prepare data specifically for WalletBalanceDisplay
@@ -227,6 +252,13 @@ export default function Home() {
       .map(asset => {
         const balanceConfig = asset.balanceDisplayConfig!;
         const result = balanceResults[asset.id] || { data: undefined, isLoading: true, isError: false };
+        
+        // Find original index and type for color calculation
+        const originalIndex = SUPPORTED_ASSETS.findIndex(a => a.id === asset.id);
+        // Use apiType from the main asset config, default to 'reserve' if missing
+        const assetType = asset.apiType || 'reserve'; 
+        const color = getInvestmentColor(assetType, originalIndex);
+
         return {
           // Data for display comes from balanceConfig and results
           id: asset.id,
@@ -237,6 +269,7 @@ export default function Home() {
           value: result.data,
           isLoading: result.isLoading,
           isError: result.isError,
+          color: color, // Pass the calculated color
         };
       });
   }, [assetsToDisplay, balanceResults]);
@@ -278,7 +311,6 @@ export default function Home() {
             manualAddress={manualAddress}
             isManualAddressValid={isManualAddressValid}
             onManualAddressChange={handleManualAddressChange}
-            onShowManualBalances={handleShowManualBalances}
             displayAddress={displayAddress}
             balanceDisplayData={balanceDisplayData} // Pass newly structured data
           />

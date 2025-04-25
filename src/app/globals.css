@@ -9,6 +9,17 @@
   --text-primary: #F9FAFB;
   --text-secondary: #9CA3AF;
   --border: #374151;
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 214, 219, 220;
+  --background-end-rgb: 255, 255, 255;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 255, 255, 255;
+    --background-start-rgb: 0, 0, 0;
+    --background-end-rgb: 0, 0, 0;
+  }
 }
 
 @tailwind base;
@@ -16,8 +27,13 @@
 @tailwind utilities;
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))
+    )
+    rgb(var(--background-start-rgb));
+  color: rgb(var(--foreground-rgb));
   font-family: 'Inter', sans-serif;
   min-height: 100vh;
 }
@@ -45,4 +61,34 @@ body {
 
 .input::placeholder {
   color: var(--text-secondary);
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* Custom card style (if not directly using Tailwind) */
+.card {
+  background-color: #1F2937; /* gray-800 */
+  border-radius: 0.75rem; /* rounded-xl */
+  /* padding handled by utility classes like p-8 */
+}
+
+/* Add Button Glow Animation */
+@keyframes button-glow {
+  0%, 100% { 
+    /* Slightly less intense shadow */
+    box-shadow: 0 0 8px 0px rgba(16, 185, 129, 0.5); 
+  }
+  50% { 
+    /* More intense shadow */
+    box-shadow: 0 0 16px 4px rgba(16, 185, 129, 0.7); 
+  }
+}
+
+.animate-button-glow {
+  /* Apply the animation: name duration timing-function iteration-count */
+  animation: button-glow 2.5s ease-in-out infinite;
 }

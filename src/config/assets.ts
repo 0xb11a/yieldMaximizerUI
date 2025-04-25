@@ -1,6 +1,8 @@
 // src/config/assets.ts
 import { Address } from 'viem';
 import { erc20Abi } from '@/config/constants'; // Import ABI
+import initLensAbi from './abis/InitLens.json'; // Import InitLens ABI
+// import posManagerAbi from './abis/PosManager.json'; // Removed unused import
 
 // Represents basic info about a token
 export interface TokenInfo {
@@ -28,6 +30,9 @@ export interface AssetConfig {
   // Optional: Token representing the deposit/liquidity (e.g., lvUSDC, LP token)
   receiptToken?: TokenInfo;
 
+  // Optional: Explorer URL for the asset
+  explorerUrl?: string;
+
   // --- Balance Display Configuration --- 
   // Specifies which token balance to fetch and display in UI
   balanceDisplayConfig?: {
@@ -35,12 +40,13 @@ export interface AssetConfig {
     tokenSymbol: string;   // Symbol to display
     tokenDecimals: number; // Decimals for formatting
     hook: 'useBalance' | 'useReadContract'; // Hook to use
-    args?: { abi: any; functionName: string; }; // Args for useReadContract
+    args?: { abi: ReadonlyArray<unknown>; functionName: string; }; // Args for useReadContract - Replaced 'any' with ReadonlyArray<unknown>
   };
 
   // --- API Configuration --- 
   // Type to send to the /fetch-pool-data API
   apiType: 'pool' | 'reserve';
+  apiName?: string; // Optional: Name expected in the API response if different from display 'name'
 }
 
 
@@ -63,7 +69,7 @@ const MANTLE_USDT: TokenInfo = {
 const INITCAPITAL_INUSDC: TokenInfo = {
     address: '0x00a55649e597d463fd212fbe48a3b40f0e227d06',
     symbol: 'inUSDC',
-    decimals: 14, // Based on previous comments
+    decimals: 6, // CORRECTED: Decimals confirmed as 6
 };
 // --- Removed Placeholders for Merchant Moe Pool ---
 
@@ -75,11 +81,12 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     name: 'Lendle USDC Reserve',
     type: 'reserve',
     source: 'lendle',
-    // API identifies this reserve by the underlying token address
-    contractAddress: MANTLE_LVUSDC.address, // CORRECTED: Use underlying token address for API
+    contractAddress: MANTLE_USDC.address, 
     underlyingTokens: [MANTLE_USDC], 
     receiptToken: MANTLE_LVUSDC,    
     apiType: 'reserve',
+    // Add explorer URL for the lvUSDC token
+    explorerUrl: 'https://mantlescan.xyz/token/0xf36afb467d1f05541d998bbbcd5f7167d67bd8fc', 
     // Display the balance of the receipt token (lvUSDC)
     balanceDisplayConfig: {
         tokenAddress: MANTLE_LVUSDC.address,
@@ -94,8 +101,8 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     id: 'wallet-usdc',
     name: 'Wallet USDC',
     type: 'reserve', 
-    source: 'lendle', 
-    contractAddress: MANTLE_USDC.address, // API identifier is the token itself
+    source: 'wallet', 
+    contractAddress: '0x0000000000000000000000000000000000000000',
     underlyingTokens: [MANTLE_USDC],
     receiptToken: undefined, 
     apiType: 'reserve', 
@@ -112,19 +119,29 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     id: 'initcapital-usdc',
     name: 'InitCapital USDC Reserve',
     type: 'reserve',
-    source: 'initcapital',
+    source: 'init',
+    apiName: 'init USDC Reserve',
     // API identifies this reserve by the underlying token address
-    contractAddress: MANTLE_USDC.address, // CORRECTED: Use underlying token address for API
+    contractAddress: MANTLE_USDC.address,
     underlyingTokens: [MANTLE_USDC],
     receiptToken: INITCAPITAL_INUSDC,
     apiType: 'reserve',
-    // Display the balance of the receipt token (inUSDC)
+    // Add explorer URL for the inUSDC token
+    explorerUrl: 'https://mantlescan.xyz/token/0x00a55649e597d463fd212fbe48a3b40f0e227d06', 
+    // Display the balance by calling InitLens.getInitPosInfos
     balanceDisplayConfig: {
-        tokenAddress: INITCAPITAL_INUSDC.address,
-        tokenSymbol: INITCAPITAL_INUSDC.symbol,
-        tokenDecimals: INITCAPITAL_INUSDC.decimals,
-        // TODO: Verify correct hook for inUSDC (useBalance or useReadContract?)
-        hook: 'useBalance', 
+        tokenAddress: '0x4725e220163e0b90b40dd5405ee08718523dea78', // InitLens contract address
+        tokenSymbol: INITCAPITAL_INUSDC.symbol, // Still display as inUSDC
+        tokenDecimals: INITCAPITAL_INUSDC.decimals, // Use inUSDC decimals for display
+        hook: 'useReadContract',
+        args: { 
+            abi: initLensAbi,
+            functionName: 'getInitPosInfos', 
+            // NOTE: Actual call requires `_initPosIds` argument.
+            // The UI component needs to fetch these IDs separately using PosManager 
+            // (0x0e7401707CD08c03CDb53DAEF3295DDFb68BBa92) and provide them here.
+            // Then, it needs to process the returned PosInfo[] to sum the relevant USDC amounts.
+        },
     },
   },
   // --- Merchant Moe USDC/USDT Pool --- 
@@ -143,6 +160,8 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
         decimals: 18, // Placeholder decimals
     }, 
     apiType: 'pool',
+    // Add explorer URL for the pool contract
+    explorerUrl: 'https://mantlescan.xyz/address/0x48c1a89af1102cad358549e9bb16ae5f96cddfec', 
     /* // Temporarily disable balance display for this pool
     balanceDisplayConfig: {
         tokenAddress: '0x48c1a89af1102cad358549e9bb16ae5f96cddfec', // Assuming LP address = pool address
@@ -156,31 +175,32 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
   // Removed example-pool and lendle-reserve-unknown placeholders
 ];
 
-// Helper function to get assets formatted for the /fetch-pool-data API
-// Passes the main contractAddress and apiType, ensuring uniqueness
+
 export const getAssetsForApi = (): { type: 'pool' | 'reserve'; address: Address; source?: string }[] => {
-  // Use a Map to ensure uniqueness based on type, address, and source
   const uniqueFunds = new Map<string, { type: 'pool' | 'reserve'; address: Address; source?: string }>();
 
   SUPPORTED_ASSETS.forEach(asset => {
+    // Skip assets with source 'wallet'
+    if (asset.source === 'wallet') {
+      return; // Skip this asset
+    }
+
     const fund = {
       type: asset.apiType,
-      address: asset.contractAddress, // Use the main contract address for the API call
+      address: asset.contractAddress, 
       source: asset.source,
     };
-    // Create a unique key
+    
     const key = `${fund.type}-${fund.address}-${fund.source ?? 'undefined'}`;
     if (!uniqueFunds.has(key)) {
       uniqueFunds.set(key, fund);
     }
   });
 
-  // Return an array of the unique fund objects
   return Array.from(uniqueFunds.values());
 };
 
-// Helper function to get assets that should be displayed in the balance list
-// Filters for assets that have a defined balanceDisplayConfig
+
 export const getAssetsForBalanceDisplay = (): AssetConfig[] => {
    return SUPPORTED_ASSETS.filter(asset => !!asset.balanceDisplayConfig);
 }; 

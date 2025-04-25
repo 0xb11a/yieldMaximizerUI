@@ -8,7 +8,7 @@ export default function Header() {
       <div className="container mx-auto px-8 py-6 flex justify-between items-center">
         <div className="flex items-center">
           <Link href="/" className="text-2xl font-bold gradient-text">
-            b11a
+            Yield Maximizer
           </Link>
         </div>
       </div>
