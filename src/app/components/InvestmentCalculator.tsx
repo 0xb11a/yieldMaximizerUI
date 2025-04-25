@@ -431,7 +431,6 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
 
   // Determine which allocation data to display
   const displayAllocationData = displayMode === 'current' ? currentYield : optimalAllocation;
-  const displayTotalProfit = displayMode === 'current' ? currentTotalProfit : optimalDistribution?.total_profit;
   const showResults = !isLoading && displayMode !== 'idle' && displayAllocationData.length > 0;
 
   return (
