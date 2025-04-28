@@ -23,11 +23,11 @@ interface AllocationItem {
   percentage: number;
   color: string;
   type: 'pool' | 'reserve';
-  expected_return: number; // Total APY
+  expected_return: number;
   allocation: number;
-  expectedProfit: number;  // Added profit specific to this allocation
-  reserve_apy?: number;   // APY from reserve/fees
-  rewards_apy?: number;   // APY from rewards
+  expectedProfit: number;
+  reserve_apy?: number;
+  rewards_apy?: number;
   total_apr?: number;     
   base_apr?: number;      
   rewards_apr?: number;   
@@ -36,11 +36,11 @@ interface AllocationItem {
 interface CurrentYieldItem {
   name: string;
   symbol: string;
-  balance: number; // Formatted balance (USD value or token amount)
+  balance: number;
   color: string;
-  type: 'pool' | 'reserve'; // Indicates if it's mapped to a pool or reserve
-  expected_return: number; // Total APY from the mapped pool/reserve
-  expectedYearlyProfit: number; // Calculated yearly profit (balance * APY)
+  type: 'pool' | 'reserve';
+  expected_return: number;
+  expectedYearlyProfit: number;
   reserve_apy?: number;
   rewards_apy?: number;
   total_apr?: number;
@@ -54,36 +54,30 @@ interface CurrentYieldItem {
 const INITIAL_ALLOCATION: AllocationItem[] = [];
 const INITIAL_CURRENT_YIELD: CurrentYieldItem[] = [];
 
-// Define props for the component
 interface InvestmentCalculatorProps {
-  initialFunds?: number; // Receive initial funds from parent for optimal calc
-  walletBalances?: WalletBalance[]; // Receive wallet balances for current yield calc
+  supplyFunds?: number; 
+  walletBalances?: WalletBalance[]; 
 }
 
-export default function InvestmentCalculator({ initialFunds = 0, walletBalances = [] }: InvestmentCalculatorProps) {
+  export default function InvestmentCalculator({ supplyFunds = 0, walletBalances = [] }: InvestmentCalculatorProps) {
   const [displayMode, setDisplayMode] = useState<'idle' | 'current' | 'optimal'>('idle');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isClient, setIsClient] = useState(false);
 
-  // State for Optimal Allocation results
   const [optimalAllocation, setOptimalAllocation] = useState<AllocationItem[]>(INITIAL_ALLOCATION);
   const [optimalDistribution, setOptimalDistribution] = useState<ApiResponse | null>(null);
 
-  // State for Current Yield results
   const [currentYield, setCurrentYield] = useState<CurrentYieldItem[]>(INITIAL_CURRENT_YIELD);
-  const [currentTotalProfit, setCurrentTotalProfit] = useState<number>(0); // State for total current profit
+  const [currentTotalProfit, setCurrentTotalProfit] = useState<number>(0);
 
-  // State to hold fetched pool and reserve data (used by both modes)
   const [fetchedPools, setFetchedPools] = useState<Pool[]>([]);
   const [fetchedReserves, setFetchedReserves] = useState<Reserve[]>([]);
 
-  // Processes API response (Optimal Allocation) into formatted allocation data
   const calculateOptimalDistribution = (apiResponse: ApiResponse): AllocationItem[] => {
     const investments = apiResponse.investments;
     const validTotalFunds = apiResponse.total_funds > 0 ? apiResponse.total_funds : 1;
 
-    // Find the original index in the fetched data for color mapping
     const findOriginalIndex = (name: string, type: 'pool' | 'reserve'): number => {
       if (type === 'pool') {
         return fetchedPools.findIndex(p => p.name === name);
@@ -112,55 +106,48 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
     return calculatedAllocation;
   };
 
-  // useEffect to set isClient to true after mounting
   useEffect(() => {
     setIsClient(true);
   }, []);
 
-   // useEffect to trigger current yield calculation when walletBalances are available
-   // and we are not already showing optimal results
+   // Calculate current yield when wallet balances change
    useEffect(() => {
-     let isCancelled = false; // Cancellation flag for this effect run
+     let isCancelled = false;
 
      const calculateCurrentYieldInternal = async () => {
        if (walletBalances.length === 0) {
-         return; // Exit if no balances
+         return; 
        }
     
        setIsLoading(true); 
-       setError(null); // Clear previous errors
-       // We don't reset currentYield/totalProfit here to avoid clearing potentially valid results
-       // from a quick previous run before this one finishes.
+       setError(null); 
     
        const walletAddressToUse: string = process.env.NEXT_PUBLIC_DEMO_WALLET_ADDRESS || "0x0000000000000000000000000000000000000000";
     
        try {
-         // Step 1: Fetch Pool and Reserve Base Data
+         // --- Step 1: Fetch Pool and Reserve Base Data --- 
          const poolReserveBaseData = await fetchPoolAndReserveData(walletAddressToUse);
-         // --- Check cancellation after await --- 
          if (isCancelled) {
              return;
          } 
 
          const localFetchedPools = poolReserveBaseData.pools;
          const localFetchedReserves = poolReserveBaseData.reserves;
-         // Update fetched data state to be used by this run and potentially optimal calc later
-         setFetchedPools(localFetchedPools); 
+         setFetchedPools(localFetchedPools);
          setFetchedReserves(localFetchedReserves);
     
          if (localFetchedPools.length === 0 && localFetchedReserves.length === 0) {
              if (!isCancelled) setError('No pools or reserves base data found.');
-             return; // Exit if no base data found
+             return;
          }
     
-         // Step 2: Fetch Current APYs 
+         // --- Step 2: Fetch Current APYs --- 
          const apyData = await fetchOptimalAllocation(0, localFetchedPools, localFetchedReserves);
-         // --- Check cancellation after await --- 
          if (isCancelled) {
              return;
          } 
          
-         // Step 3: Map Wallet Balances
+         // --- Step 3: Map Wallet Balances --- 
          let totalCalculatedProfit = 0;
          const calculatedYield: CurrentYieldItem[] = walletBalances.map((balance) => {
              const assetConfig = SUPPORTED_ASSETS.find(asset => asset.name === balance.name);
@@ -176,6 +163,7 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
                      expectedYearlyProfit: 0,
                   } as CurrentYieldItem;
              }
+
              let baseData: Pool | Reserve | undefined;
              if (assetConfig.apiType === 'pool') {
                  baseData = localFetchedPools.find(p => p.address === assetConfig.contractAddress); 
@@ -185,14 +173,13 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
                       || (r.address && r.address === assetConfig.contractAddress) 
                   );
              }
+
              let matchedApyDetail: Investment | undefined;
              if (assetConfig.source === 'merchantmoe' && assetConfig.apiType === 'pool') {
                  matchedApyDetail = apyData.investments.find(detail =>
                      detail.name === "USDC-USDT" && detail.type === 'pool'
                  );
-                  // if (matchedApyDetail) { console.log(`Matched Merchant Moe pool...`); }
              } else {
-                 // Use apiName for matching if available, otherwise fall back to name (case-insensitive)
                  const nameToMatch = (assetConfig.apiName ?? assetConfig.name).toLowerCase();
                  matchedApyDetail = apyData.investments.find(detail =>
                      detail.name.toLowerCase() === nameToMatch && detail.type === assetConfig.apiType
@@ -201,6 +188,7 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
              if (!matchedApyDetail && assetConfig.name !== 'Wallet USDC') { 
                   console.warn(`No matching APY data found for config: ${assetConfig.name} ...`);
              }
+
              const itemData: Partial<CurrentYieldItem> = {
                  name: assetConfig.name,
                  symbol: balance.symbol, 
@@ -214,9 +202,11 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
                  rewards_apy: 0,
                  expectedYearlyProfit: 0,
              };
+
              const tokenPrice = baseData?.token_price ?? 1; 
              const balanceInUsd = (itemData.balance ?? 0) * tokenPrice;
              itemData.balance = balanceInUsd; 
+             
              if (matchedApyDetail) {
                  itemData.reserve_apy = matchedApyDetail.reserve_apy ?? 0;
                  itemData.rewards_apy = matchedApyDetail.rewards_apy ?? 0;
@@ -226,7 +216,6 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
                  itemData.rewards_apr = matchedApyDetail.rewards_apr;
                  itemData.expectedYearlyProfit = balanceInUsd * (itemData.expected_return / 100);
                  totalCalculatedProfit += itemData.expectedYearlyProfit;
-                 // console.log(`Profit calc for ${itemData.name}...`);
              } 
              const originalIndex = SUPPORTED_ASSETS.findIndex(a => a.id === assetConfig.id);
              itemData.color = getInvestmentColor(assetConfig.type, originalIndex);
@@ -237,16 +226,13 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
            setCurrentYield(calculatedYield);
            setCurrentTotalProfit(totalCalculatedProfit); 
            if (calculatedYield.length > 0) {
-               // Only switch to current mode if we actually have yield data
                setDisplayMode('current'); 
            } else {
-               // If calculation resulted in empty list, go back to idle
                setDisplayMode('idle'); 
            }
        }
     
      } catch (err) {
-       // Handle errors only if not cancelled
        if (!isCancelled) {
          console.error('Current Yield Calculation Error:', err);
          let errorMessage = 'An unexpected error occurred calculating current yield';
@@ -254,13 +240,11 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
             errorMessage = `Error fetching data for current yield: ${err.message}`;
          }
          setError(errorMessage);
-         // Ensure state reflects the error
          setDisplayMode('idle'); 
          setCurrentYield(INITIAL_CURRENT_YIELD); 
          setCurrentTotalProfit(0);
        }
      } finally {
-       // Set loading false only if this run finished (was not cancelled)
        if (!isCancelled) {
          setIsLoading(false);
        }
@@ -269,29 +253,21 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
 
    // --- Effect Execution Logic --- 
    if (walletBalances.length > 0 && displayMode !== 'optimal') {
-       // Only trigger calculation if we have balances and are not showing optimal results
        calculateCurrentYieldInternal();
    } else if (walletBalances.length === 0 && displayMode === 'current') {
-       // If balances disappear while showing current yield, reset to idle
        setDisplayMode('idle'); 
        setCurrentYield(INITIAL_CURRENT_YIELD); 
        setCurrentTotalProfit(0);
-       // Clear fetched data as well?
-       // setFetchedPools([]); 
-       // setFetchedReserves([]);
-   } // If displayMode is 'optimal' or 'idle' with no balances, do nothing
+   }
 
    // --- Cleanup Function --- 
    return () => {
      isCancelled = true;
    };
- // Dependencies: Rerun ONLY when balances change OR displayMode changes (as it's used in the initial check)
- }, [walletBalances, displayMode]); 
+ }, [walletBalances, displayMode]);
 
-  // Renamed handler for Optimal Allocation button click
   const handleOptimalAllocation = async () => {
-    // Use initialFunds prop now
-    if (initialFunds <= 0) {
+    if (supplyFunds <= 0) {
       setError("Please provide a valid total supply value greater than 0 to calculate optimal allocation.");
       return;
     }
@@ -301,7 +277,7 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
        console.warn("Attempted optimal allocation calculation before current yield data was ready.");
        return;
     }
-     // Check if we have fetched pool/reserve data needed for adjustment
+    // Check if we have fetched pool/reserve data needed for adjustment
     if (fetchedPools.length === 0 && fetchedReserves.length === 0) {
         setError("Pool and reserve market data not available...");
         console.warn('Attempted optimal allocation calculation before fetching base pool/reserve data.');
@@ -312,41 +288,35 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
     setError(null);
     setOptimalDistribution(null); 
     setOptimalAllocation(INITIAL_ALLOCATION);
-    setDisplayMode('optimal'); // Set mode immediately for optimal calc
+    setDisplayMode('optimal');
 
-    const totalFundsForCalc: number = initialFunds; 
+    const totalFundsForCalc: number = supplyFunds; 
 
     try {
       // --- Step 1: Simulate Withdrawal - Create Adjusted Market Data ---
       console.log("Simulating withdrawal: Adjusting market data based on current holdings:", currentYield);
 
-      // Create deep copies to avoid modifying the original state used by Current Yield display
       const adjustedPools = JSON.parse(JSON.stringify(fetchedPools)) as Pool[];
       const adjustedReserves = JSON.parse(JSON.stringify(fetchedReserves)) as Reserve[];
 
       currentYield.forEach(holding => {
-          // Skip pure wallet balance, only adjust for protocol positions
           if (holding.name === 'Wallet USDC') {
           return;
       }
 
-          const holdingAmount = holding.balance; // This is already the USD value calculated in currentYield
+          const holdingAmount = holding.balance;
 
           if (holding.type === 'pool') {
-              // DO NOTHING for pools - API should handle pool state based on total_funds
-              // We just pass the current fetched pool data
               console.log(`Skipping adjustment for pool: ${holding.name}`);
 
           } else if (holding.type === 'reserve') {
-              // Find the corresponding reserve in adjusted data
                const reserveToAdjust = adjustedReserves.find(r =>
-                  // Match using the originalReserveData name if present, or fallback to holding name comparison (case-insensitive)
                   (holding.originalReserveData && r.name === holding.originalReserveData.name) ||
-                  (r.name?.toLowerCase() === holding.name.toLowerCase()) // Fallback
+                  (r.name?.toLowerCase() === holding.name.toLowerCase())
                );
               if (reserveToAdjust) {
                   console.log(`Adjusting reserve ${reserveToAdjust.name}: reducing total_supplied (${reserveToAdjust.total_supplied}) by ${holdingAmount}`);
-                  reserveToAdjust.total_supplied = Math.max(0, reserveToAdjust.total_supplied - holdingAmount); // Prevent negative supply
+                  reserveToAdjust.total_supplied = Math.max(0, reserveToAdjust.total_supplied - holdingAmount);
               } else {
                    console.warn(`Could not find reserve to adjust supply for: ${holding.name} (lookup name: ${holding.originalReserveData?.name ?? holding.name})`);
               }
@@ -359,19 +329,17 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
       console.log('Fetching optimal allocation with adjusted market data and total funds:', totalFundsForCalc);
       const allocationData = await fetchOptimalAllocation(
           totalFundsForCalc,
-          adjustedPools,     // Use ADJUSTED pools
-          adjustedReserves,  // Use ADJUSTED reserves
+          adjustedPools,
+          adjustedReserves,
           1 // Example: Set min_allocation_percent
       );
-      // console.log('<<< Raw Response from fetchOptimalAllocation >>>:', allocationData);
       
-      const newAllocation = calculateOptimalDistribution(allocationData); // This function uses API response names
+      const newAllocation = calculateOptimalDistribution(allocationData);
       
       setOptimalDistribution(allocationData);
       setOptimalAllocation(newAllocation); 
 
     } catch (err) {
-       // ... Error handling (no changes needed here) ...
       let errorMessage = 'An unexpected error occurred during optimal allocation';
       if (err instanceof Error) {
         if (err.message.includes('Failed to fetch') || err instanceof TypeError) { 
@@ -384,16 +352,15 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
       console.error('Optimal Allocation Process Error:', err);
       setOptimalDistribution(null);
       setOptimalAllocation(INITIAL_ALLOCATION);
-      setDisplayMode('idle'); // Reset mode on error
+      setDisplayMode('idle');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Custom Tooltip for BarChart (Only used for Optimal Allocation)
   const CustomBarTooltip = ({ active, payload, label }: TooltipProps<ValueType, NameType>) => {
     if (active && payload && payload.length) {
-      const data = payload[0].payload as AllocationItem; // Cast to AllocationItem
+      const data = payload[0].payload as AllocationItem;
       const formatApy = (apy: number | undefined) => 
         apy !== undefined ? `${apy.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : 'N/A';
       const formatProfit = (profit: number | undefined) =>
@@ -418,7 +385,6 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
     return null;
   };
 
-  // Function to format Y-axis ticks
   const formatYAxisTick = (tickItem: number): string => {
     if (tickItem >= 1000000) {
       return `$${(tickItem / 1000000).toFixed(1)}M`;
@@ -429,7 +395,6 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
     }
   };
 
-  // Determine which allocation data to display
   const displayAllocationData = displayMode === 'current' ? currentYield : optimalAllocation;
   const showResults = !isLoading && displayMode !== 'idle' && displayAllocationData.length > 0;
 
@@ -486,16 +451,15 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
         }
        `}</style>
 
-      {/* Button to trigger OPTIMAL calculation */}
+      {/* Calculate Optimal Yield Button */}
       <div className="mt-8 mb-8">
          <button
             onClick={handleOptimalAllocation}
-            disabled={isLoading || initialFunds <= 0}
+            disabled={isLoading || supplyFunds <= 0}
             className={`w-full px-6 py-3 bg-[#10B981] hover:bg-[#059669] text-white rounded-lg transition-all duration-150 ease-in-out shadow-md 
                       font-semibold transform hover:scale-[1.02] active:scale-[0.98] 
-                      ${(isLoading || initialFunds <= 0) 
+                      ${(isLoading || supplyFunds <= 0) 
                         ? 'opacity-50 cursor-not-allowed' 
-                        // Add glow animation class when enabled
                         : 'animate-button-glow' 
                       }`}
           >
@@ -510,7 +474,7 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
         </div>
       )}
 
-      {/* Loading Indicator for Current Yield */}
+      {/* Loading Indicator: Current Yield */}
       {isLoading && displayMode !== 'optimal' && (
         <div className="card p-4 sm:p-8 animate-pulse">
           <div className="mb-6 h-6 flex items-center">
@@ -519,17 +483,14 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
           <div className="space-y-1 lg:space-y-2">
             {[1, 2, 3].map((i) => (
               <div key={i} className={`flex flex-col lg:flex-row lg:items-center py-2 border-b border-gray-800 last:border-b-0`}>
-                {/* Asset Name Skeleton */}
                 <div className="flex items-center gap-2 p-1 mb-1 lg:mb-0 lg:flex-[2]">
                   <div className="w-3 h-3 rounded-full flex-shrink-0 bg-gray-700"/>
                   <div className="h-4 bg-gray-700 rounded w-3/4"></div>
                 </div>
-                {/* Mobile Skeleton - Just show simplified lines */}
                 <div className="block lg:hidden pl-5 space-y-2 text-xs mt-1">
                     <div className="h-3 bg-gray-700 rounded w-1/2"></div>
                     <div className="h-3 bg-gray-700 rounded w-1/3"></div>
                 </div>
-                {/* Desktop Skeleton */}
                 <div className="hidden lg:flex flex-1 justify-end gap-2 lg:gap-3 p-1">
                   <div className="h-4 bg-gray-700 rounded w-24"></div>
                   <div className="h-4 bg-gray-700 rounded w-16"></div>
@@ -542,128 +503,123 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
         </div>
       )}
 
-      {/* Results Section (Conditional Rendering) */}
+      {/* Results Section */}
       <div className={`transition-opacity duration-500 ${
         showResults ? 'opacity-100' : 'opacity-0 h-0 overflow-hidden'
       }`}>
-        {/* Optimal Allocation specific: Distribution Chart */}
+        {/* Optimal Allocation View */}
         {displayMode === 'optimal' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-8 mb-8"> {/* Add mb-8 */}
-        <div className="card p-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-8 mb-8">
+            {/* Optimal Distribution Chart */}
+            <div className="card p-8">
               <h2 className="text-xl font-semibold mb-2">Optimal Distribution</h2>
-          <div style={{ width: '100%', height: 300 }}>
-            <ResponsiveContainer>
-              <BarChart 
-                    data={optimalAllocation} // Use optimalAllocation state
-                margin={{ top: 5, right: 0, left: 0, bottom: 5 }} 
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                <XAxis dataKey="name" hide />
-                <YAxis 
-                  tickFormatter={formatYAxisTick} 
-                  stroke="#9CA3AF"
-                  tick={{ fill: '#9CA3AF', fontSize: 12 }}
-                />
-                <Tooltip content={<CustomBarTooltip />} cursor={{ fill: 'rgba(107, 114, 128, 0.1)' }} />
-                <Bar dataKey="allocation">
-                      {optimalAllocation.map((entry: AllocationItem) => ( // Use optimalAllocation and add type
+              <div style={{ width: '100%', height: 300 }}>
+                <ResponsiveContainer>
+                  <BarChart 
+                    data={optimalAllocation}
+                    margin={{ top: 5, right: 0, left: 0, bottom: 5 }} 
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                    <XAxis dataKey="name" hide />
+                    <YAxis 
+                      tickFormatter={formatYAxisTick} 
+                      stroke="#9CA3AF"
+                      tick={{ fill: '#9CA3AF', fontSize: 12 }}
+                    />
+                    <Tooltip content={<CustomBarTooltip />} cursor={{ fill: 'rgba(107, 114, 128, 0.1)' }} />
+                    <Bar dataKey="allocation">
+                      {optimalAllocation.map((entry: AllocationItem) => (
                         <Cell key={`cell-optimal-${entry.name}`} fill={entry.color} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-            {/* Allocation List (Optimal) - Reuse structure, pass optimalAllocation */}
-        <div className="card p-4 sm:p-8 flex flex-col">
-               <h2 className="text-xl font-semibold mb-2">Optimal Allocation</h2>
-          <div className="space-y-1 lg:space-y-2 flex-grow">
-            {/* Headers */}
-            <div className="hidden lg:flex items-center text-xs text-[#9CA3AF] font-semibold mb-2">
-                       <div className="flex-[2] p-1"><span>Asset</span></div>
-              <div className="flex flex-1 justify-end gap-2 lg:gap-3 p-1">
-                 <span className="w-24 text-right">Allocation ($)</span>
-                 <span className="w-16 text-right">Total APR</span> 
-                 <span className="w-16 text-right">Total APY</span>
-                 <span className="w-24 text-right">Profit ($)</span> 
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             </div>
-            {/* Items */}
-                   {optimalAllocation.map((item: AllocationItem) => { // Use optimalAllocation and add type
-                      const formatPercent = (value: number | undefined) => value !== undefined ? `${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : '-';
-                      const formatCurrency = (value: number | undefined) => value !== undefined ? `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-';
-              return (
-                         <div key={`optimal-${item.name}`} className={`flex flex-col lg:flex-row lg:items-center transition-colors duration-150 text-sm py-2 border-b border-gray-800 lg:border-none last:border-b-0`}>
-                  {/* Asset Name */}
-                  <div className="flex items-center gap-2 p-1 mb-1 lg:mb-0 lg:flex-[2]">
-                    <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }}/>
-                    <span className="text-white font-medium break-words">{item.name}</span> 
-                            </div>
-                            {/* Mobile Data */}
-                            <div className="block lg:hidden pl-5 space-y-1 text-xs">
-                                {/* ... (Mobile view for optimal allocation) ... */}
-                                 <div className="flex justify-between"><span className='text-[#9CA3AF]'>Allocation:</span><span className="text-white font-medium">{formatCurrency(item.allocation)}</span></div>
-                                 <div className="flex justify-between"><span className='text-[#9CA3AF]'>Total APY:</span><span className="text-[#34D399] font-semibold">{formatPercent(item.expected_return)}</span></div>
-                                 <div className="flex justify-between"><span className='text-[#9CA3AF]'>Profit:</span><span className="text-white font-medium">{formatCurrency(item.expectedProfit)}</span></div>
-                            </div>
-                            {/* Desktop Data */}
-                            <div className="hidden lg:flex flex-1 justify-end gap-2 lg:gap-3 p-1">
-                                {/* ... (Desktop view for optimal allocation using item properties) ... */}
-                                  <div className="w-24 text-right"><span className="text-white">{formatCurrency(item.allocation)}</span></div>
-                                  {/* Total APR Tooltip */}
-                                  <div className="tooltip-container w-16 text-right">
-                                     <span className="text-gray-400 hover:text-white cursor-help">{formatPercent(item.total_apr)}</span>
-                                     <div className="tooltip-content">
-                                         <div className="tooltip-row"><span className="tooltip-label">Base APR</span><span className="tooltip-value">{formatPercent(item.base_apr)}</span></div>
-                                         <div className="tooltip-row"><span className="tooltip-label">Rewards APR</span><span className="tooltip-value">{formatPercent(item.rewards_apr)}</span></div>
-                                     </div>
-                                  </div>
-                                  {/* Total APY Tooltip */}
-                                  <div className="tooltip-container w-16 text-right">
-                                     <span className="text-[#34D399] font-semibold hover:text-emerald-400 cursor-help">{formatPercent(item.expected_return)}</span>
-                                     <div className="tooltip-content">
-                                        <div className="tooltip-row"><span className="tooltip-label">Base APY</span><span className="tooltip-value">{formatPercent(item.reserve_apy)}</span></div>
-                                        <div className="tooltip-row"><span className="tooltip-label">Rewards APY</span><span className="tooltip-value">{formatPercent(item.rewards_apy)}</span></div>
-                                     </div>
-                                  </div>
-                                  {/* Profit */}
-                                  <div className="w-24 text-right"><span className="text-white">{formatCurrency(item.expectedProfit)}</span></div>
-                            </div>
-                         </div>
-                      );
-                   })}
+            {/* Optimal Allocation List */}
+            <div className="card p-4 sm:p-8 flex flex-col">
+              <h2 className="text-xl font-semibold mb-2">Optimal Allocation</h2>
+              <div className="space-y-1 lg:space-y-2 flex-grow">
+                {/* Desktop Headers */}
+                <div className="hidden lg:flex items-center text-xs text-[#9CA3AF] font-semibold mb-2">
+                  <div className="flex-[2] p-1"><span>Asset</span></div>
+                  <div className="flex flex-1 justify-end gap-2 lg:gap-3 p-1">
+                    <span className="w-24 text-right">Allocation ($)</span>
+                    <span className="w-16 text-right">Total APR</span> 
+                    <span className="w-16 text-right">Total APY</span>
+                    <span className="w-24 text-right">Profit ($)</span> 
+                  </div>
                 </div>
-                {/* Total Profit (Optimal vs Current) */}
-                {optimalDistribution && ( // Check optimalDistribution is available
-                   <div className="pt-4 mt-auto border-t border-[#1E2633] space-y-1">
-                      {/* Current Profit */}
-                      {currentTotalProfit > 0 && ( // Only show current if it's calculated and positive
-                         <div className="flex items-center justify-between text-sm">
-                            <span className="text-gray-400 flex-[2]">Current Yearly Profit</span>
-                            <span className="text-gray-400 text-right">
-                              ${currentTotalProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </span>
-                         </div>
-                      )}
-                      {/* Optimal Profit */}
-                      <div className="flex items-center justify-between">
-                         <span className="text-[#34D399] font-semibold flex-[2]">Optimal Yearly Profit</span>
-                         <span className="text-[#34D399] font-semibold text-right">
-                           ${optimalDistribution.total_profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                         </span>
+                {/* Allocation Items */}
+                {optimalAllocation.map((item: AllocationItem) => {
+                  const formatPercent = (value: number | undefined) => value !== undefined ? `${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : '-';
+                  const formatCurrency = (value: number | undefined) => value !== undefined ? `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-';
+                  return (
+                    <div key={`optimal-${item.name}`} className={`flex flex-col lg:flex-row lg:items-center transition-colors duration-150 text-sm py-2 border-b border-gray-800 lg:border-none last:border-b-0`}>
+                      <div className="flex items-center gap-2 p-1 mb-1 lg:mb-0 lg:flex-[2]">
+                        <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }}/>
+                        <span className="text-white font-medium break-words">{item.name}</span> 
                       </div>
-                   </div>
-                )}
+                      {/* Mobile Data View */}
+                      <div className="block lg:hidden pl-5 space-y-1 text-xs">
+                        <div className="flex justify-between"><span className='text-[#9CA3AF]'>Allocation:</span><span className="text-white font-medium">{formatCurrency(item.allocation)}</span></div>
+                        <div className="flex justify-between"><span className='text-[#9CA3AF]'>Total APY:</span><span className="text-[#34D399] font-semibold">{formatPercent(item.expected_return)}</span></div>
+                        <div className="flex justify-between"><span className='text-[#9CA3AF]'>Profit:</span><span className="text-white font-medium">{formatCurrency(item.expectedProfit)}</span></div>
+                      </div>
+                      {/* Desktop Data View */}
+                      <div className="hidden lg:flex flex-1 justify-end gap-2 lg:gap-3 p-1">
+                        <div className="w-24 text-right"><span className="text-white">{formatCurrency(item.allocation)}</span></div>
+                        {/* Total APR Tooltip */}
+                        <div className="tooltip-container w-16 text-right">
+                          <span className="text-gray-400 hover:text-white cursor-help">{formatPercent(item.total_apr)}</span>
+                          <div className="tooltip-content">
+                            <div className="tooltip-row"><span className="tooltip-label">Base APR</span><span className="tooltip-value">{formatPercent(item.base_apr)}</span></div>
+                            <div className="tooltip-row"><span className="tooltip-label">Rewards APR</span><span className="tooltip-value">{formatPercent(item.rewards_apr)}</span></div>
+                          </div>
+                        </div>
+                        {/* Total APY Tooltip */}
+                        <div className="tooltip-container w-16 text-right">
+                          <span className="text-[#34D399] font-semibold hover:text-emerald-400 cursor-help">{formatPercent(item.expected_return)}</span>
+                          <div className="tooltip-content">
+                            <div className="tooltip-row"><span className="tooltip-label">Base APY</span><span className="tooltip-value">{formatPercent(item.reserve_apy)}</span></div>
+                            <div className="tooltip-row"><span className="tooltip-label">Rewards APY</span><span className="tooltip-value">{formatPercent(item.rewards_apy)}</span></div>
+                          </div>
+                        </div>
+                        <div className="w-24 text-right"><span className="text-white">{formatCurrency(item.expectedProfit)}</span></div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {/* Total Profit Comparison */}
+              {optimalDistribution && (
+                <div className="pt-4 mt-auto border-t border-[#1E2633] space-y-1">
+                  {currentTotalProfit > 0 && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-400 flex-[2]">Current Yearly Profit</span>
+                      <span className="text-gray-400 text-right">
+                        ${currentTotalProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between">
+                    <span className="text-[#34D399] font-semibold flex-[2]">Optimal Yearly Profit</span>
+                    <span className="text-[#34D399] font-semibold text-right">
+                      ${optimalDistribution.total_profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
 
-        {/* Current Yield specific: Allocation List */}
+        {/* Current Yield View */}
         {displayMode === 'current' && isClient && (
           <div className="card p-4 sm:p-8 flex flex-col">
-             <h2 className="text-xl font-semibold mb-2">Current Estimated Yield</h2>
-             <div className="space-y-1 lg:space-y-2 flex-grow">
-              {/* Headers */}
+            <h2 className="text-xl font-semibold mb-2">Current Estimated Yield</h2>
+            <div className="space-y-1 lg:space-y-2 flex-grow">
+              {/* Desktop Headers */}
               <div className="hidden lg:flex items-center text-xs text-[#9CA3AF] font-semibold mb-2">
                 <div className="flex-[2] p-1"><span>Asset</span></div>
                 <div className="flex flex-1 justify-end gap-2 lg:gap-3 p-1">
@@ -673,57 +629,53 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
                   <span className="w-24 text-right">Yearly Profit ($)</span> 
                 </div>
               </div>
-              {/* Items */}
+              {/* Yield Items */}
               {currentYield.length === 0 && <p className="text-gray-400 text-sm">No current yield data to display. Your wallet may not hold assets in supported pools/reserves.</p>}
-              {currentYield.map((item) => { // Use currentYield state
+              {currentYield.map((item) => {
                 const formatPercent = (value: number | undefined) => value !== undefined ? `${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : '-';
                 const formatCurrency = (value: number | undefined) => value !== undefined ? `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-';
 
                 return (
                   <div key={`current-${item.symbol}-${item.name}`} className={`flex flex-col lg:flex-row lg:items-center transition-colors duration-150 text-sm py-2 border-b border-gray-800 lg:border-none last:border-b-0`}>
-                    {/* Asset Name */}
                     <div className="flex items-center gap-2 p-1 mb-1 lg:mb-0 lg:flex-[2]">
-                       <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }}/>
-                       <span className="text-white font-medium break-words">{item.name} ({item.symbol})</span> {/* Added symbol */}
-                  </div>
-                  
-                  {/* Data - Mobile/Tablet View */}
-                  <div className="block lg:hidden pl-5 space-y-1 text-xs">
-                        <div className="flex justify-between"><span className='text-[#9CA3AF]'>Balance:</span><span className="text-white font-medium">{formatCurrency(item.balance)}</span></div>
-                        <div className="flex justify-between"><span className='text-[#9CA3AF]'>Total APY:</span><span className="text-[#34D399] font-semibold">{formatPercent(item.expected_return)}</span></div>
-                        <div className="flex justify-between"><span className='text-[#9CA3AF]'>Yearly Profit:</span><span className="text-white font-medium">{formatCurrency(item.expectedYearlyProfit)}</span></div>
-                  </div>
-
-                  {/* Data - Desktop View */}
-                  <div className="hidden lg:flex flex-1 justify-end gap-2 lg:gap-3 p-1">
-                       <div className="w-24 text-right"><span className="text-white">{formatCurrency(item.balance)}</span></div>
-                       {/* Total APR Tooltip */}
-                     <div className="tooltip-container w-16 text-right">
-                          <span className="text-gray-400 hover:text-white cursor-help">{formatPercent(item.total_apr)}</span>
+                      <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }}/>
+                      <span className="text-white font-medium break-words">{item.name} ({item.symbol})</span>
+                    </div>
+                    {/* Mobile Data View */}
+                    <div className="block lg:hidden pl-5 space-y-1 text-xs">
+                      <div className="flex justify-between"><span className='text-[#9CA3AF]'>Balance:</span><span className="text-white font-medium">{formatCurrency(item.balance)}</span></div>
+                      <div className="flex justify-between"><span className='text-[#9CA3AF]'>Total APY:</span><span className="text-[#34D399] font-semibold">{formatPercent(item.expected_return)}</span></div>
+                      <div className="flex justify-between"><span className='text-[#9CA3AF]'>Yearly Profit:</span><span className="text-white font-medium">{formatCurrency(item.expectedYearlyProfit)}</span></div>
+                    </div>
+                    {/* Desktop Data View */}
+                    <div className="hidden lg:flex flex-1 justify-end gap-2 lg:gap-3 p-1">
+                      <div className="w-24 text-right"><span className="text-white">{formatCurrency(item.balance)}</span></div>
+                      {/* Total APR Tooltip */}
+                      <div className="tooltip-container w-16 text-right">
+                        <span className="text-gray-400 hover:text-white cursor-help">{formatPercent(item.total_apr)}</span>
                         <div className="tooltip-content">
-                             <div className="tooltip-row"><span className="tooltip-label">Base APR</span><span className="tooltip-value">{formatPercent(item.base_apr)}</span></div>
-                             <div className="tooltip-row"><span className="tooltip-label">Rewards APR</span><span className="tooltip-value">{formatPercent(item.rewards_apr)}</span></div>
-                           </div>
+                          <div className="tooltip-row"><span className="tooltip-label">Base APR</span><span className="tooltip-value">{formatPercent(item.base_apr)}</span></div>
+                          <div className="tooltip-row"><span className="tooltip-label">Rewards APR</span><span className="tooltip-value">{formatPercent(item.rewards_apr)}</span></div>
                         </div>
-                       {/* Total APY Tooltip */}
-                     <div className="tooltip-container w-16 text-right">
-                          <span className="text-[#34D399] font-semibold hover:text-emerald-400 cursor-help">{formatPercent(item.expected_return)}</span>
-                       <div className="tooltip-content">
-                             <div className="tooltip-row"><span className="tooltip-label">Base APY</span><span className="tooltip-value">{formatPercent(item.reserve_apy)}</span></div>
-                             <div className="tooltip-row"><span className="tooltip-label">Rewards APY</span><span className="tooltip-value">{formatPercent(item.rewards_apy)}</span></div>
-                         </div>
                       </div>
-                       {/* Yearly Profit */}
-                       <div className="w-24 text-right"><span className="text-white">{formatCurrency(item.expectedYearlyProfit)}</span></div>
+                      {/* Total APY Tooltip */}
+                      <div className="tooltip-container w-16 text-right">
+                        <span className="text-[#34D399] font-semibold hover:text-emerald-400 cursor-help">{formatPercent(item.expected_return)}</span>
+                        <div className="tooltip-content">
+                          <div className="tooltip-row"><span className="tooltip-label">Base APY</span><span className="tooltip-value">{formatPercent(item.reserve_apy)}</span></div>
+                          <div className="tooltip-row"><span className="tooltip-label">Rewards APY</span><span className="tooltip-value">{formatPercent(item.rewards_apy)}</span></div>
+                        </div>
+                      </div>
+                      <div className="w-24 text-right"><span className="text-white">{formatCurrency(item.expectedYearlyProfit)}</span></div>
+                    </div>
                   </div>
-                </div>
-              );
-            })} 
+                );
+              })}
             </div>
-            {/* Total Current Yearly Profit */}
-            {currentTotalProfit > 0 && ( // Use currentTotalProfit state directly
+            {/* Total Current Profit */}
+            {currentTotalProfit > 0 && (
               <div className="pt-4 mt-auto border-t border-[#1E2633]">
-                 <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between">
                   <span className="text-[#34D399] font-semibold flex-[2]">Total Estimated Yearly Profit</span>
                   <span className="text-[#34D399] font-semibold text-right">
                     ${currentTotalProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 
@@ -731,15 +683,14 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
                 </div>
               </div>
             )}
-             {currentTotalProfit <= 0 && currentYield.length > 0 && ( // Check state directly
-                 <p className="text-sm text-gray-400 pt-4 mt-auto border-t border-[#1E2633]">No current yield detected for held assets.</p>
+            {currentTotalProfit <= 0 && currentYield.length > 0 && (
+              <p className="text-sm text-gray-400 pt-4 mt-auto border-t border-[#1E2633]">No current yield detected for held assets.</p>
             )}
-        </div>
+          </div>
         )}
       </div>
 
       {/* Pool & Reserves Information Section */}
-      {/* Condition: Show only when optimal allocation is calculated and available */}
       {displayMode === 'optimal' && optimalDistribution && (fetchedPools.length > 0 || fetchedReserves.length > 0) && (
         <>
           <h2 className="text-xl font-bold mt-8 mb-8">Pools & Reserves Information</h2>
@@ -751,7 +702,6 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
             {optimalDistribution.investments
               .filter(inv => inv.type === 'pool' && inv.allocation > 0)
               .map((investment) => {
-                // 1. Find the corresponding AssetConfig 
                 const assetConfig = SUPPORTED_ASSETS.find(a => 
                     a.apiType === 'pool' && 
                     a.name.toLowerCase().includes(investment.name.toLowerCase())
@@ -761,17 +711,15 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
                     return null; 
                 }
 
-                // 2. Find corresponding fetched data using config address (like current yield)
-                const poolData = fetchedPools.find(p => p.address === assetConfig.contractAddress); 
+                const poolData = fetchedPools.find(p => p.address === assetConfig.contractAddress);
                 if (!poolData) {
                      console.warn(`Optimal Pool: Fetched data not found for ${assetConfig.name} (Address: ${assetConfig.contractAddress})`);
                      return null;
                  }
                 
-                // 3. Use config details for display, lookup color using API name index
-                const displayTitle = assetConfig.name; 
+                const displayTitle = assetConfig.name;
                 const explorerUrl = assetConfig.explorerUrl;
-                const originalIndex = fetchedPools.findIndex(p => p.name === investment.name); // Color lookup still uses API name index
+                const originalIndex = fetchedPools.findIndex(p => p.name === investment.name);
                 const color = getInvestmentColor('pool', originalIndex);
                 
                 return (
@@ -789,7 +737,6 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
             {optimalDistribution.investments
               .filter(inv => inv.type === 'reserve' && inv.allocation > 0)
               .map((investment) => {
-                 // 1. Find the corresponding AssetConfig
                 const assetConfig = SUPPORTED_ASSETS.find(a => 
                     a.apiType === 'reserve' && 
                     (a.name === investment.name || a.name.toLowerCase() === investment.name.toLowerCase())
@@ -799,7 +746,6 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
                     return null; 
                 }
 
-                // 2. Find corresponding fetched data using config name (case-insensitive) OR address (like current yield)
                 const reserveData = fetchedReserves.find(r => 
                     (r.name?.toLowerCase() === assetConfig.name.toLowerCase()) || 
                     (r.address && r.address === assetConfig.contractAddress)
@@ -809,10 +755,9 @@ export default function InvestmentCalculator({ initialFunds = 0, walletBalances 
                      return null;
                  }
                 
-                // 3. Use config details for display, lookup color using API name index
-                const displayTitle = assetConfig.name; 
+                const displayTitle = assetConfig.name;
                 const explorerUrl = assetConfig.explorerUrl;
-                const originalIndex = fetchedReserves.findIndex(r => r.name === investment.name); // Color lookup still uses API name index
+                const originalIndex = fetchedReserves.findIndex(r => r.name === investment.name);
                 const color = getInvestmentColor('reserve', originalIndex);
                 
                 return (

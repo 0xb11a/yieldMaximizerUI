@@ -1,16 +1,16 @@
 'use client';
 
 import React from 'react';
-import { Reserve } from '@/config/apiConfig'; // Assuming Reserve type is defined here
+import { Reserve } from '@/config/apiConfig';
 
 interface ReserveInfoProps {
   title: string;
   color: string;
   reserveData: Reserve;
-  explorerUrl?: string; // <-- ADD PROP
+  explorerUrl?: string;
 }
 
-// Helper to format large numbers (can be shared)
+// Helper to format large numbers
 const formatNumber = (num: number): string => {
   if (num >= 1_000_000) {
     return `$${(num / 1_000_000).toFixed(2)}M`;
@@ -22,13 +22,11 @@ const formatNumber = (num: number): string => {
 };
 
 export default function ReserveInfo({ title, color, reserveData, explorerUrl }: ReserveInfoProps) {
-  // Calculate Utilization Rate
   const utilizationRate = 
     reserveData?.total_supplied && reserveData.total_supplied > 0 && reserveData?.total_borrowed !== undefined
     ? (reserveData.total_borrowed / reserveData.total_supplied) * 100
     : 0;
 
-  // Format Utilization Rate
   const formatUtilization = (rate: number) => 
      `${rate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
 
@@ -44,7 +42,6 @@ export default function ReserveInfo({ title, color, reserveData, explorerUrl }: 
       <div className="p-6 border-b border-[#1E2633]">
         <div className="flex items-center gap-3">
           <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
-          {/* Wrap title in link if URL exists */} 
           {explorerUrl ? (
             <a 
                href={explorerUrl} 
@@ -60,21 +57,18 @@ export default function ReserveInfo({ title, color, reserveData, explorerUrl }: 
         </div>
       </div>
       <div className="p-6 space-y-2">
-        {/* Total Supplied */}
         {reserveData?.total_supplied !== undefined && (
           <div className="flex justify-between animate-fadeIn mt-1">
             <span className="text-sm text-[#9CA3AF]">Total Supplied</span>
             <span className="text-sm text-white">{formattedTotalSupplied}</span>
           </div>
         )}
-        {/* Total Borrowed */}
         {reserveData?.total_borrowed !== undefined && (
           <div className="flex justify-between animate-fadeIn mt-1">
             <span className="text-sm text-[#9CA3AF]">Total Borrowed</span>
             <span className="text-sm text-white">{formattedTotalBorrowed}</span>
           </div>
         )}
-        {/* Utilization Rate */}
         {reserveData?.total_supplied !== undefined && reserveData?.total_borrowed !== undefined && (
            <div className="flex justify-between animate-fadeIn mt-1">
             <span className="text-sm text-[#9CA3AF]">Utilization Rate</span>

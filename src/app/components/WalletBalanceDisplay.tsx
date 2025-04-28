@@ -78,10 +78,6 @@ export default function WalletBalanceDisplay({
                     {/* Balance Header */} 
                     <div className="flex flex-1 justify-end gap-2 lg:gap-3 p-1">
                        <span className="w-24 text-right">Balance</span>
-                       {/* Placeholders to match spacing if needed */}
-                       {/* <span className="w-16 text-right"></span> */}
-                       {/* <span className="w-16 text-right"></span> */}
-                       {/* <span className="w-24 text-right"></span> */}
                     </div>
                  </div>
               )}
@@ -89,8 +85,6 @@ export default function WalletBalanceDisplay({
               {/* Map Items */}
               {balanceDisplayData.length > 0 ? balanceDisplayData.map((balInfo, index) => {
                  const formattedBalance = formatUnits(balInfo.value ?? BigInt(0), balInfo.decimals);
-                 // REMOVE default color calculation
-                 // const itemColor = balInfo.color || '#60A5FA'; 
 
                  return (
                     // Apply item container styling from InvestmentCalculator
@@ -131,10 +125,6 @@ export default function WalletBalanceDisplay({
                                  <span className="text-white">{`$${parseFloat(formattedBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 10 })}`}</span>
                                )}
                            </div>
-                           {/* Add empty placeholders for other columns if needed for alignment, or adjust flex properties */}
-                           {/* <div className="w-16 text-right"><span className="text-gray-500">-</span></div> */}
-                           {/* <div className="w-16 text-right"><span className="text-gray-500">-</span></div> */}
-                           {/* <div className="w-24 text-right"><span className="text-gray-500">-</span></div> */}
                       </div>
                      </div>
                  );

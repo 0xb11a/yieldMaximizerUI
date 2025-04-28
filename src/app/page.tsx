@@ -315,7 +315,7 @@ export default function Home() {
             balanceDisplayData={balanceDisplayData} // Pass newly structured data
           />
           <InvestmentCalculator 
-            initialFunds={totalSupplyValue} 
+            supplyFunds={totalSupplyValue} 
             walletBalances={validBalancesForCalc} // Pass newly structured data
           />
         </div>
