@@ -779,6 +779,7 @@ interface InvestmentCalculatorProps {
                 
                 const displayTitle = assetConfig.name;
                 const explorerUrl = assetConfig.explorerUrl;
+                const logoUrl = assetConfig.logoUrl;
                 // Calculate color based on index in SUPPORTED_ASSETS
                 const supportedAssetIndex = SUPPORTED_ASSETS.findIndex(a => a.id === assetConfig.id);
                 const color = getInvestmentColor('pool', supportedAssetIndex);
@@ -790,6 +791,7 @@ interface InvestmentCalculatorProps {
                     color={color}
                     data={poolData} 
                     explorerUrl={explorerUrl}
+                    logoUrl={logoUrl}
                   />
                 );
             })}
@@ -834,6 +836,7 @@ interface InvestmentCalculatorProps {
                 
                  const displayTitle = assetConfig.name;
                  const explorerUrl = assetConfig.explorerUrl;
+                 const logoUrl = assetConfig.logoUrl;
                  // Calculate color based on index in SUPPORTED_ASSETS
                  const supportedAssetIndex = SUPPORTED_ASSETS.findIndex(a => a.id === assetConfig.id);
                  const color = getInvestmentColor('reserve', supportedAssetIndex);
@@ -845,6 +848,7 @@ interface InvestmentCalculatorProps {
                     color={color}
                     reserveData={reserveData} 
                     explorerUrl={explorerUrl}
+                    logoUrl={logoUrl}
                   />
                 );
             })}

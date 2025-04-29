@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 import { Reserve } from '@/config/apiConfig';
 
 interface ReserveInfoProps {
@@ -8,6 +9,7 @@ interface ReserveInfoProps {
   color: string;
   reserveData: Reserve;
   explorerUrl?: string;
+  logoUrl?: string;
 }
 
 // Helper to format large numbers
@@ -21,7 +23,7 @@ const formatNumber = (num: number): string => {
   }
 };
 
-export default function ReserveInfo({ title, color, reserveData, explorerUrl }: ReserveInfoProps) {
+export default function ReserveInfo({ title, color, reserveData, explorerUrl, logoUrl }: ReserveInfoProps) {
   const utilizationRate = 
     reserveData?.total_supplied && reserveData.total_supplied > 0 && reserveData?.total_borrowed !== undefined
     ? (reserveData.total_borrowed / reserveData.total_supplied) * 100
@@ -42,6 +44,7 @@ export default function ReserveInfo({ title, color, reserveData, explorerUrl }: 
       <div className="p-6 border-b border-[#1E2633]">
         <div className="flex items-center gap-3">
           <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+          {/* Render title (linked if explorerUrl exists) */}
           {explorerUrl ? (
             <a 
                href={explorerUrl} 
@@ -53,6 +56,16 @@ export default function ReserveInfo({ title, color, reserveData, explorerUrl }: 
             </a>
           ) : (
             titleElement
+          )}
+          {/* Add logo if URL is provided (moved to the right) */}
+          {logoUrl && (
+            <Image 
+              src={logoUrl} 
+              alt={`${title} logo`} 
+              width={24}
+              height={24}
+              className="rounded-full"
+            />
           )}
         </div>
       </div>

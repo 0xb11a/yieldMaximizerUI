@@ -17,6 +17,7 @@ export interface AssetConfig {
   name: string; // Display name (e.g., 'Lendle USDC', 'Example Pool A/B')
   type: 'pool' | 'reserve'; // Type of the asset (pool or reserve)
   source?: string; // Protocol source (e.g., 'lendle')
+  logoUrl?: string; // Optional URL for the asset's logo
 
   // --- Addresses ---
   // Address of the main pool or reserve contract (or underlying token if that's the API identifier)
@@ -85,6 +86,7 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     underlyingTokens: [MANTLE_USDC], 
     receiptToken: MANTLE_LVUSDC,    
     apiType: 'reserve',
+    logoUrl: '/svg/lendle-logo-white.png', // Updated path
     // Add explorer URL for the lvUSDC token
     explorerUrl: 'https://mantlescan.xyz/token/0xf36afb467d1f05541d998bbbcd5f7167d67bd8fc', 
     // Display the balance of the receipt token (lvUSDC)
@@ -106,6 +108,7 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     underlyingTokens: [MANTLE_USDC],
     receiptToken: undefined, 
     apiType: 'reserve', 
+    logoUrl: undefined, // No logo for wallet USDC? Keeping undefined.
     // Display the balance of the underlying token (USDC)
     balanceDisplayConfig: {
         tokenAddress: MANTLE_USDC.address,
@@ -126,6 +129,7 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     underlyingTokens: [MANTLE_USDC],
     receiptToken: INITCAPITAL_INUSDC,
     apiType: 'reserve',
+    logoUrl: '/svg/INIT_logo_White.png', // Updated path
     // Add explorer URL for the inUSDC token
     explorerUrl: 'https://mantlescan.xyz/token/0x00a55649e597d463fd212fbe48a3b40f0e227d06', 
     // Display the balance by calling InitLens.getInitPosInfos
@@ -153,6 +157,7 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     // Pool contract address confirmed from screenshot
     contractAddress: '0x48c1a89af1102cad358549e9bb16ae5f96cddfec',
     underlyingTokens: [MANTLE_USDC, MANTLE_USDT],
+    logoUrl: '/svg/merchant-moe-logo.ea3ba2549690769a8d68.png', // Updated path
     // TODO: Verify LP token address, symbol, and decimals. Assuming LP address = pool address for now.
     receiptToken: {
         address: '0x48c1a89af1102cad358549e9bb16ae5f96cddfec', // Assuming LP address = pool address
