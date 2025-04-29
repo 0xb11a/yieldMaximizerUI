@@ -2,49 +2,30 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useBalance, useReadContract, UseBalanceReturnType, UseReadContractReturnType } from 'wagmi';
-import { isAddress, formatUnits, Address } from 'viem';
-import { WalletBalance } from '@/types';
-import { AssetConfig, getAssetsForBalanceDisplay, SUPPORTED_ASSETS } from '@/config/assets';
-import { useInitCapitalBalance } from '@/hooks/useInitCapitalBalance';
+import { isAddress, formatUnits, Address} from 'viem';
+import { AssetConfig, getAssetsForBalanceDisplay, SUPPORTED_ASSETS, MANTLE_USDC} from '@/config/assets';
+import { useInitCapitalBalance } from '@/hooks/mantleCustom/useInitCapitalBalance';
+import { useMMPoolBalance } from '@/hooks/mantleCustom/useMMPoolBalance';
 import { getInvestmentColor } from '@/styles/colors';
+import { BalanceDisplayItem, WalletBalance } from '@/types';
 
 import Header from './components/Header';
 import InvestmentCalculator from '@/app/components/InvestmentCalculator';
 import WalletBalanceDisplay from '@/app/components/WalletBalanceDisplay';
 
-// Interface for the data passed to WalletBalanceDisplay
-// Represents the balance of a specific token configured for display
-interface BalanceDisplayItem {
-  id: string; // From original AssetConfig
-  name: string; // From original AssetConfig
-  symbol: string; // From balanceDisplayConfig
-  decimals: number; // From balanceDisplayConfig
-  address: Address; // From balanceDisplayConfig (token address being displayed)
-  value: bigint | undefined | null;
+// Define a type for the results stored in state, matching relevant fields from BalanceDisplayItem
+interface BalanceStateResult {
+  value: bigint | undefined | null; // Matches BalanceDisplayItem['value'] now
   isLoading: boolean;
   isError: boolean;
-  color: string; // Add color property
-  // Include underlying tokens for potential future use in display?
-  // underlyingTokens?: TokenInfo[]; 
 }
-
-// --- Remove Static Asset Definitions ---
-// const usdcAsset: AssetData = { ... };
-// const lvUsdcAsset: AssetData = { ... };
-// ---
 
 // --- Internal component to fetch balance for a single asset's display token ---
 interface AssetBalanceFetcherProps {
   assetId: string; // Use ID to link results back
   walletAddress: Address | undefined;
   balanceConfig: AssetConfig['balanceDisplayConfig']; // Pass only the relevant config part
-  onBalanceUpdate: (assetId: string, result: BalanceResult) => void;
-}
-
-interface BalanceResult {
-  data: bigint | undefined | null;
-  isLoading: boolean;
-  isError: boolean;
+  onBalanceUpdate: (assetId: string, result: BalanceStateResult) => void;
 }
 
 function AssetBalanceFetcher({ assetId, walletAddress, balanceConfig, onBalanceUpdate }: AssetBalanceFetcherProps) {
@@ -89,14 +70,14 @@ function AssetBalanceFetcher({ assetId, walletAddress, balanceConfig, onBalanceU
   // Effect for InitCapital
   useEffect(() => {
     if (isInitCapital && isInitCapitalHookActive) { 
-        const result: BalanceResult = {
-            data: initCapitalBalance,
+        const result: BalanceStateResult = {
+            value: initCapitalBalance,
             isLoading: initCapitalLoading,
             isError: initCapitalError,
         };
         onBalanceUpdate(assetId, result);
     } else if (isInitCapital && !isInitCapitalHookActive) {
-        const result: BalanceResult = { data: undefined, isLoading: false, isError: false }; 
+        const result: BalanceStateResult = { value: undefined, isLoading: false, isError: false }; 
         onBalanceUpdate(assetId, result);
     }
   }, [
@@ -108,22 +89,22 @@ function AssetBalanceFetcher({ assetId, walletAddress, balanceConfig, onBalanceU
   // Effect for Standard Hooks (useBalance / useReadContract)
   useEffect(() => {
     if (!isInitCapital && balanceConfig) {
-        let result: BalanceResult;
+        let result: BalanceStateResult;
         if (balanceConfig.hook === 'useBalance') {
             result = {
-                data: balanceResult.data?.value,
+                value: balanceResult.data?.value,
                 isLoading: balanceResult.isLoading,
                 isError: balanceResult.isError,
             };
         } else if (balanceConfig.hook === 'useReadContract') {
             result = {
-                data: readContractResult.data as bigint | undefined,
+                value: readContractResult.data as bigint | undefined,
                 isLoading: readContractResult.isLoading,
                 isError: readContractResult.isError,
             };
         } else {
             // Fallback if hook type is somehow wrong (shouldn't happen)
-            result = { data: undefined, isLoading: false, isError: true };
+            result = { value: undefined, isLoading: false, isError: true };
         }
         onBalanceUpdate(assetId, result);
     }
@@ -147,17 +128,24 @@ export default function Home() {
   const [displayAddress, setDisplayAddress] = useState<Address | undefined>(undefined);
   const [isManualAddressValid, setIsManualAddressValid] = useState<boolean>(true);
   const [totalSupplyValue, setTotalSupplyValue] = useState<number>(0);
-  const [balanceResults, setBalanceResults] = useState<Record<string, BalanceResult>>({});
+  const [balanceResults, setBalanceResults] = useState<Record<string, BalanceStateResult>>({});
   // ---
 
-  // Get assets configured for balance display
-  const assetsToDisplay = useMemo(() => getAssetsForBalanceDisplay(), []);
+  // Get assets configured for standard balance display (excluding MM pool now)
+  const assetsToDisplayStandard = useMemo(() => 
+    getAssetsForBalanceDisplay().filter(asset => asset.id !== 'merchantmoe-usdc-usdt'), 
+  []);
+
+  // Find the Merchant Moe asset config
+  const merchantMoeAsset = useMemo(() => 
+    SUPPORTED_ASSETS.find(asset => asset.id === 'merchantmoe-usdc-usdt'), 
+  []);
 
   // Callback for AssetBalanceFetcher - MEMOIZED
-  const handleBalanceUpdate = useCallback((assetId: string, result: BalanceResult) => {
+  const handleBalanceUpdate = useCallback((assetId: string, result: BalanceStateResult) => {
     setBalanceResults(prev => {
-      // Avoid unnecessary updates if the data hasn't actually changed
-      if (prev[assetId]?.data === result.data && 
+      // Type checking is now consistent
+      if (prev[assetId]?.value === result.value && 
           prev[assetId]?.isLoading === result.isLoading &&
           prev[assetId]?.isError === result.isError) {
         return prev;
@@ -166,65 +154,101 @@ export default function Home() {
     });
   }, []); // Empty dependency array because it only uses setBalanceResults
 
-  // --- Derive Loading/Error Status --- 
+  // --- Hook for Merchant Moe Pool Balance ---
+  const mmTokenX = merchantMoeAsset?.underlyingTokens?.[0];
+  const mmTokenY = merchantMoeAsset?.underlyingTokens?.[1];
+  
+  const { 
+    usdcBalanceRaw: mmUsdcBalanceBigInt, // Hook now returns bigint | null
+    isLoading: mmIsLoading,
+    error: mmError,
+    refetch: refetchMmBalance 
+  } = useMMPoolBalance(
+    merchantMoeAsset?.contractAddress,
+    mmTokenX, 
+    mmTokenY, 
+    displayAddress,
+    80
+  );
+
+  // Effect to merge Merchant Moe balance results into the main state
+  useEffect(() => {
+    if (merchantMoeAsset) {
+      // Directly use the bigint value from the hook
+      const result: BalanceStateResult = {
+        value: mmUsdcBalanceBigInt, // Use the bigint | null value directly
+        isLoading: mmIsLoading,
+        isError: !!mmError,
+      };
+      handleBalanceUpdate(merchantMoeAsset.id, result);
+    }
+  }, [merchantMoeAsset, mmUsdcBalanceBigInt, mmIsLoading, mmError, handleBalanceUpdate]);
+
+  // --- Derive Loading/Error Status (Include MM Pool Status) --- 
   const balanceStatus = useMemo(() => {
-      const assetsWithBalanceConfig = assetsToDisplay.filter(asset => asset.balanceDisplayConfig);
-      // Considered loaded only if we have a result object for the asset
-      const allLoaded = assetsWithBalanceConfig.every(asset => balanceResults[asset.id] && !balanceResults[asset.id].isLoading);
-      const anyError = assetsWithBalanceConfig.some(asset => balanceResults[asset.id]?.isError);
+      // Assets with standard balance config + MM pool if it exists
+      const assetsToCheck = merchantMoeAsset 
+          ? [...assetsToDisplayStandard, merchantMoeAsset] 
+          : assetsToDisplayStandard;
+          
+      const allLoaded = assetsToCheck.every(asset => balanceResults[asset.id] && !balanceResults[asset.id].isLoading);
+      const anyError = assetsToCheck.some(asset => balanceResults[asset.id]?.isError);
       return { allLoaded, anyError };
-  // Recalculate only when results object reference changes or assets list changes
-  }, [assetsToDisplay, balanceResults]); 
+  // Recalculate when results object reference changes or assets list changes
+  }, [assetsToDisplayStandard, merchantMoeAsset, balanceResults]); 
 
   // --- Calculate Total Supply Effect ---
   useEffect(() => {
-    // Use derived status flags
     const { allLoaded, anyError } = balanceStatus; 
-
     if (displayAddress && allLoaded && !anyError) {
       let totalUsdcEquivalentBigInt = BigInt(0);
-      let usdcDecimals = 6; // Default USDC decimals
-
-      // Find USDC config to get decimals reliably
-      const usdcConfig = assetsToDisplay.find(a => a.id === 'wallet-usdc');
+      let usdcDecimals = 6; 
+      const usdcConfig = SUPPORTED_ASSETS.find(a => a.id === 'wallet-usdc');
       if (usdcConfig?.balanceDisplayConfig) {
           usdcDecimals = usdcConfig.balanceDisplayConfig.tokenDecimals;
       }
-
-      assetsToDisplay.filter(asset => asset.balanceDisplayConfig).forEach(asset => {
+      const allAssetsWithResults = merchantMoeAsset 
+          ? [...assetsToDisplayStandard, merchantMoeAsset] 
+          : assetsToDisplayStandard;
+      allAssetsWithResults.forEach(asset => {
          const result = balanceResults[asset.id];
-         const value = result?.data ?? BigInt(0);
-
-         // --- Total Supply Calculation Logic --- 
-         // Sum balances assuming 1:1 conversion for receipt tokens to underlying USDC
-         // TODO: Implement accurate conversion using exchange rates for lvUSDC, inUSDC etc.
-         // TODO: Decide how to handle non-USDC based assets (e.g., LP tokens) - currently ignored.
-         if (asset.id === 'wallet-usdc' || asset.id === 'lendle-usdc' || asset.id === 'initcapital-usdc') {
-            // Assuming the displayed balance value (USDC, lvUSDC, inUSDC) can be treated as USDC equivalent for now
-            totalUsdcEquivalentBigInt += value;
+         // Check if value is a valid bigint and greater than 0
+         if (result && typeof result.value === 'bigint' && !result.isError && result.value > BigInt(0)) {
+             // Simple 1:1 sum for now, including MM pool correctly
+             if (asset.id === 'wallet-usdc' || asset.id === 'lendle-usdc' || asset.id === 'initcapital-usdc' || asset.id === 'merchantmoe-usdc-usdt') {
+                totalUsdcEquivalentBigInt += result.value;
+             } 
          } 
-         // --- End Logic --- 
       });
-
       const formattedTotal = formatUnits(totalUsdcEquivalentBigInt, usdcDecimals); 
       const newTotalSupply = parseFloat(formattedTotal);
-      setTotalSupplyValue(newTotalSupply); // This is now the estimated total USDC equivalent
-
-      // --- Logging (Keep as is for debugging) ---
+      setTotalSupplyValue(newTotalSupply); 
+      // --- Logging --- 
       console.log('--- Balance Data Update (Aggregated) ---');
       console.log('Address:', displayAddress);
-      assetsToDisplay.filter(asset => asset.balanceDisplayConfig).forEach(asset => {
-           console.log(`${asset.name} (${asset.balanceDisplayConfig?.tokenSymbol}):`, balanceResults[asset.id]);
+      allAssetsWithResults.forEach(asset => {
+          const result = balanceResults[asset.id];
+          let symbol = asset.balanceDisplayConfig?.tokenSymbol;
+          if (asset.id === 'merchantmoe-usdc-usdt') { symbol = 'USDC (MM Pool)'; } 
+          if (result && symbol) { 
+              console.log(`${asset.name} (${symbol}):`, result); 
+          }
       });
       console.log('Total Supply Calculated (USDC Equivalent Estimate):', newTotalSupply);
-      // --- End Logging ---
-
+      // --- End Logging --- 
     } else if (!displayAddress) {
       setTotalSupplyValue(0);
-      setBalanceResults({});
+      // --- MODIFICATION START ---
+      // Only clear results if they are not already empty
+      if (Object.keys(balanceResults).length > 0) {
+         console.log("(Total Supply Effect) Clearing balanceResults because displayAddress is undefined/invalid.");
+         setBalanceResults({});
+      }
+      // --- MODIFICATION END ---
     }
+    // Keep dependencies including balanceResults
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [displayAddress, assetsToDisplay, balanceStatus.allLoaded, balanceStatus.anyError]); 
+  }, [displayAddress, assetsToDisplayStandard, merchantMoeAsset, balanceStatus.allLoaded, balanceStatus.anyError, balanceResults]); 
   // ---
 
   // --- Event Handlers ---
@@ -235,72 +259,91 @@ export default function Home() {
     setIsManualAddressValid(isValid);
 
     if (isValid) {
-      // If valid, set the display address immediately
       setDisplayAddress(newAddress as Address);
+      // Optionally trigger refetch for MM pool if needed, though hook should react to address change via useAccount
+       refetchMmBalance(); // Explicitly refetch MM balance on address change
     } else {
-      // If invalid (or empty), clear the display address and results
         setDisplayAddress(undefined);
         setBalanceResults({}); 
     }
   };
 
   // --- Prepare Props for Components --- 
-  // Prepare data specifically for WalletBalanceDisplay
   const balanceDisplayData: BalanceDisplayItem[] = useMemo(() => {
-    return assetsToDisplay
-      .filter(asset => asset.balanceDisplayConfig) // Ensure config exists
+    const allAssetsForDisplay = merchantMoeAsset 
+        ? [...assetsToDisplayStandard, merchantMoeAsset] 
+        : assetsToDisplayStandard;
+
+    return allAssetsForDisplay
       .map(asset => {
-        const balanceConfig = asset.balanceDisplayConfig!;
-        const result = balanceResults[asset.id] || { data: undefined, isLoading: true, isError: false };
-        
-        // Find original index and type for color calculation
+        const result: BalanceStateResult = balanceResults[asset.id] || { value: undefined, isLoading: !displayAddress, isError: false }; 
         const originalIndex = SUPPORTED_ASSETS.findIndex(a => a.id === asset.id);
-        // Use apiType from the main asset config, default to 'reserve' if missing
         const assetType = asset.apiType || 'reserve'; 
         const color = getInvestmentColor(assetType, originalIndex);
 
-        return {
-          // Data for display comes from balanceConfig and results
-          id: asset.id,
-          name: asset.name, // Use the main asset name
-          symbol: balanceConfig.tokenSymbol,
-          decimals: balanceConfig.tokenDecimals,
-          address: balanceConfig.tokenAddress, // Address of the token being displayed
-          value: result.data,
-          isLoading: result.isLoading,
-          isError: result.isError,
-          color: color, // Pass the calculated color
-        };
-      });
-  }, [assetsToDisplay, balanceResults]);
+        // Merchant Moe Pool
+        if (asset.id === 'merchantmoe-usdc-usdt') {
+          return {
+            id: asset.id,
+            name: asset.name, 
+            symbol: MANTLE_USDC.symbol, 
+            decimals: MANTLE_USDC.decimals, 
+            address: MANTLE_USDC.address, 
+            value: result.value, // Pass bigint | null | undefined
+            isLoading: result.isLoading,
+            isError: result.isError,
+            color: color, 
+            underlyingTokens: asset.underlyingTokens,
+          };
+        } 
+        // Standard Assets
+        else if (asset.balanceDisplayConfig) {
+            const balanceConfig = asset.balanceDisplayConfig;
+            return {
+              id: asset.id,
+              name: asset.name, 
+              symbol: balanceConfig.tokenSymbol,
+              decimals: balanceConfig.tokenDecimals,
+              address: balanceConfig.tokenAddress, 
+              value: result.value, // Pass bigint | undefined
+              isLoading: result.isLoading,
+              isError: result.isError,
+              color: color, 
+              underlyingTokens: asset.underlyingTokens,
+            };
+        } 
+        else { return null; }
+      })
+      .filter(item => item !== null) as BalanceDisplayItem[]; 
 
-  // Prepare data for InvestmentCalculator (WalletBalance format)
+  }, [assetsToDisplayStandard, merchantMoeAsset, balanceResults, displayAddress]);
+
+  // Prepare data for InvestmentCalculator
   const validBalancesForCalc: WalletBalance[] = useMemo(() => {
-    return balanceDisplayData // Start from already prepared display data
-      .filter(bal => !bal.isLoading && !bal.isError && bal.value !== undefined && bal.value !== null && bal.value > BigInt(0))
+    return balanceDisplayData
+      .filter(bal => !bal.isLoading && !bal.isError && typeof bal.value === 'bigint' && bal.value > BigInt(0))
       .map(bal => ({
-        // Map from BalanceDisplayItem to WalletBalance
-        address: bal.address, // Use the token address from balanceDisplayConfig
+        address: bal.address, 
         symbol: bal.symbol,
-        name: bal.name, // Keep the main asset name
+        name: bal.name, 
         decimals: bal.decimals,
-        value: bal.value as bigint
+        value: bal.value as bigint // Already filtered for bigint
       }));
   }, [balanceDisplayData]);
   // ---
 
   return (
     <div className="min-h-screen bg-[#111827]">
-      {/* Render Fetcher components for assets with display config */}
-      {assetsToDisplay
-        .filter(asset => asset.balanceDisplayConfig) // Ensure config exists before rendering fetcher
+      {/* Render Fetcher components ONLY for assets with standard display config */}
+      {assetsToDisplayStandard 
+        .filter(asset => asset.balanceDisplayConfig) 
         .map(asset => (
           <AssetBalanceFetcher 
             key={asset.id}
-            assetId={asset.id} // Pass assetId separately
+            assetId={asset.id} 
             walletAddress={displayAddress}
-            balanceConfig={asset.balanceDisplayConfig!} // Pass the specific balance config
-            onBalanceUpdate={handleBalanceUpdate} // Pass memoized callback
+            balanceConfig={asset.balanceDisplayConfig!} 
+            onBalanceUpdate={handleBalanceUpdate} 
           />
       ))}
 

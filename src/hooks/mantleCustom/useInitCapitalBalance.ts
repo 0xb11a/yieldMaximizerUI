@@ -3,9 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useReadContracts } from 'wagmi';
 import { Address, Abi } from 'viem';
-import initLensAbiJson from '../config/abis/InitLens.json';
-import posManagerAbiJson from '../config/abis/PosManager.json';
-import { SUPPORTED_ASSETS } from '../config/assets';
+import initLensAbiJson from '@/config/abis/InitLens.json';
+import posManagerAbiJson from '@/config/abis/PosManager.json';
+import { SUPPORTED_ASSETS, AssetConfig } from '@/config/assets';
 
 // --- Constants --- 
 const POS_MANAGER_ADDRESS: Address = '0x0e7401707CD08c03CDb53DAEF3295DDFb68BBa92';
@@ -16,7 +16,7 @@ const initLensAbi = initLensAbiJson as Abi;
 const posManagerAbi = posManagerAbiJson as Abi;
 
 // Find the InitCapital config
-const initCapitalConfig = SUPPORTED_ASSETS.find(asset => asset.id === 'initcapital-usdc');
+const initCapitalConfig = SUPPORTED_ASSETS.find((asset: AssetConfig) => asset.id === 'initcapital-usdc');
 // *** Correction: Target the receipt token address reported by the contract ***
 const TARGET_COLLATERAL_ADDRESS: Address | undefined = initCapitalConfig?.receiptToken?.address;
 
