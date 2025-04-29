@@ -1,5 +1,7 @@
 'use client';
 
+import Image from 'next/image';
+
 interface PoolDisplayData {
   daily_fee?: number;
   pool_distribution?: number;
@@ -12,9 +14,10 @@ interface PoolInfoProps {
   color: string;
   data: PoolDisplayData; 
   explorerUrl?: string;
+  logoUrl?: string;
 }
 
-export default function PoolInfo({ title, color, data, explorerUrl }: PoolInfoProps) {
+export default function PoolInfo({ title, color, data, explorerUrl, logoUrl }: PoolInfoProps) {
 
   const formatCurrency = (amount: number | undefined) => 
     amount !== undefined ? `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A';
@@ -45,6 +48,15 @@ export default function PoolInfo({ title, color, data, explorerUrl }: PoolInfoPr
             </a>
           ) : (
             titleElement
+          )}
+          {logoUrl && (
+            <Image 
+              src={logoUrl} 
+              alt={`${title} logo`} 
+              width={36}
+              height={36}
+              className="object-contain self-center ml-auto"
+            />
           )}
         </div>
       </div>

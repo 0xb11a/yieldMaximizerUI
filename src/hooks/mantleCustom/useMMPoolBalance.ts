@@ -222,8 +222,6 @@ export function useMMPoolBalance(
     };
 
     calculateBalances();
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [publicClient, pairAddress, tokenX, tokenY, userLpBalances, tokenIdsToCheck, addressToCheck, isLoadingActiveId, isLoadingBatch]);
 
   // --- Handle Loading and Errors from initial fetches ---
