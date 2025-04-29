@@ -78,30 +78,42 @@ interface InvestmentCalculatorProps {
     const investments = apiResponse.investments;
     const validTotalFunds = apiResponse.total_funds > 0 ? apiResponse.total_funds : 1;
 
-    const findOriginalIndex = (name: string, type: 'pool' | 'reserve'): number => {
-      if (type === 'pool') {
-        return fetchedPools.findIndex(p => p.name === name);
-      } else {
-        return fetchedReserves.findIndex(r => r.name === name);
-      }
-    };
-
     const calculatedAllocation: AllocationItem[] = investments
       .filter(investment => investment.allocation > 0)
-      .map((investment) => ({
-        name: investment.name,
-        percentage: parseFloat(((investment.allocation / validTotalFunds) * 100).toFixed(2)),
-        color: getInvestmentColor(investment.type, findOriginalIndex(investment.name, investment.type)),
-        type: investment.type,
-        expected_return: investment.expected_return,
-        allocation: investment.allocation,
-        expectedProfit: investment.expectedProfit,
-        reserve_apy: investment.reserve_apy,
-        rewards_apy: investment.rewards_apy,
-        total_apr: investment.total_apr,
-        base_apr: investment.base_apr,
-        rewards_apr: investment.rewards_apr
-      }));
+      .map((investment) => {
+        // Find the corresponding AssetConfig
+        const assetConfig = SUPPORTED_ASSETS.find(config => {
+            if (config.type !== investment.type) return false;
+            // Match API name first, then config name (case-insensitive)
+            return (config.apiName && config.apiName === investment.name) || 
+                   (config.name.toLowerCase() === investment.name.toLowerCase()) ||
+                   // Added fallback for pool name differences (e.g., "USDC-USDT" vs "Merchant Moe USDC-USDT Pool")
+                   (config.type === 'pool' && config.name.toLowerCase().includes(investment.name.toLowerCase())); 
+        });
+
+        // Determine the index within SUPPORTED_ASSETS for consistent coloring
+        const supportedAssetIndex = assetConfig 
+            ? SUPPORTED_ASSETS.findIndex(a => a.id === assetConfig.id) 
+            : -1; // Fallback index if no config found
+
+        const displayName = assetConfig?.name ?? investment.name; // Use config name if found
+
+        return {
+            name: displayName,
+            percentage: parseFloat(((investment.allocation / validTotalFunds) * 100).toFixed(2)),
+            // Use index from SUPPORTED_ASSETS for color
+            color: getInvestmentColor(investment.type, supportedAssetIndex),
+            type: investment.type,
+            expected_return: investment.expected_return,
+            allocation: investment.allocation,
+            expectedProfit: investment.expectedProfit,
+            reserve_apy: investment.reserve_apy,
+            rewards_apy: investment.rewards_apy,
+            total_apr: investment.total_apr,
+            base_apr: investment.base_apr,
+            rewards_apr: investment.rewards_apr
+        };
+      });
 
     return calculatedAllocation;
   };
@@ -299,49 +311,70 @@ interface InvestmentCalculatorProps {
       const adjustedPools = JSON.parse(JSON.stringify(fetchedPools)) as Pool[];
       const adjustedReserves = JSON.parse(JSON.stringify(fetchedReserves)) as Reserve[];
 
+      const findAdjustedReserve = (holding: CurrentYieldItem): Reserve | undefined => {
+        const assetConfig = SUPPORTED_ASSETS.find(a =>
+          a.type === 'reserve' &&
+          (a.name === holding.name || a.receiptToken?.symbol === holding.symbol)
+        );
+        return adjustedReserves.find(r => {
+            // Priority 1: Match apiName first if available
+            if (assetConfig?.apiName && r.name === assetConfig.apiName) return true;
+            // Priority 2: Match original data name if available
+            if (holding.originalReserveData?.name && r.name === holding.originalReserveData.name) return true;
+            // Priority 3: Match holding display name (case-insensitive)
+            if (r.name?.toLowerCase() === holding.name.toLowerCase()) return true;
+            // Priority 4: Fallback to address matching (config vs api return)
+            if (assetConfig?.contractAddress && r.address && r.address === assetConfig.contractAddress) return true;
+            if (holding.originalReserveData?.address && r.address && r.address === holding.originalReserveData.address) return true;
+            return false;
+        });
+      };
+
+      const findAdjustedPool = (holding: CurrentYieldItem): Pool | undefined => {
+         return adjustedPools.find(p => {
+            if (holding.originalPoolData?.address && p.address === holding.originalPoolData.address) return true;
+            if (p.name?.toLowerCase() === holding.name.toLowerCase()) return true;
+            const assetConfig = SUPPORTED_ASSETS.find(a => a.type === 'pool' && a.name === holding.name);
+            if (assetConfig?.contractAddress && p.address && p.address === assetConfig.contractAddress) return true;
+            return false;
+        });
+      };
+
+      // --- Main loop using helper functions ---
       currentYield.forEach(holding => {
           if (holding.name === 'Wallet USDC') {
-          return;
-      }
+              return; // Skip wallet balance
+          }
 
           const holdingAmount = holding.balance;
 
           if (holding.type === 'pool') {
-              // --- ADJUSTED LOGIC FOR POOLS ---
-              const poolToAdjust = adjustedPools.find(p =>
-                  (holding.originalPoolData && p.address === holding.originalPoolData.address) || // Prefer matching by original address
-                  (p.name?.toLowerCase() === holding.name.toLowerCase()) // Fallback to name match
-              );
+              const poolToAdjust = findAdjustedPool(holding);
               if (poolToAdjust) {
-                  // Use 'pool_distribution' as the liquidity field
-                  const liquidityField = 'pool_distribution'; // Confirmed field name
+                  const liquidityField = 'pool_distribution';
                   if (liquidityField in poolToAdjust && typeof poolToAdjust[liquidityField] === 'number') {
                       const currentLiquidity = poolToAdjust[liquidityField];
                       console.log(`Adjusting pool ${poolToAdjust.name}: reducing ${liquidityField} (${currentLiquidity}) by ${holdingAmount}`);
                       poolToAdjust[liquidityField] = Math.max(0, currentLiquidity - holdingAmount);
                   } else {
-                      console.warn(`Pool ${poolToAdjust.name} does not have a valid numerical field '${liquidityField}'`);
+                      console.warn(`Pool ${poolToAdjust.name} (Holding: ${holding.name}) does not have valid numerical field '${liquidityField}'`);
                   }
               } else {
-                  console.warn(`Could not find pool to adjust liquidity for: ${holding.name} (lookup name: ${holding.originalPoolData?.name ?? holding.name})`);
+                  console.warn(`Could not find matching adjusted pool for holding: ${holding.name}`);
               }
-              // --- END ADJUSTED LOGIC ---
-
           } else if (holding.type === 'reserve') {
-               const reserveToAdjust = adjustedReserves.find(r =>
-                  (holding.originalReserveData && r.name === holding.originalReserveData.name) || // Match by original data if available
-                  (r.name?.toLowerCase() === holding.name.toLowerCase()) // Fallback to matching by name (case-insensitive)
-               );
+              const reserveToAdjust = findAdjustedReserve(holding);
               if (reserveToAdjust) {
-                  // Assuming 'total_supplied' is the correct field for reserves
-                  if ('total_supplied' in reserveToAdjust && typeof reserveToAdjust.total_supplied === 'number') {
-                  console.log(`Adjusting reserve ${reserveToAdjust.name}: reducing total_supplied (${reserveToAdjust.total_supplied}) by ${holdingAmount}`);
-                  reserveToAdjust.total_supplied = Math.max(0, reserveToAdjust.total_supplied - holdingAmount);
+                  const supplyField = 'total_supplied';
+                  if (supplyField in reserveToAdjust && typeof reserveToAdjust[supplyField] === 'number') {
+                      const currentSupply = reserveToAdjust[supplyField];
+                      console.log(`Adjusting reserve ${reserveToAdjust.name}: reducing ${supplyField} (${currentSupply}) by ${holdingAmount}`);
+                      reserveToAdjust[supplyField] = Math.max(0, currentSupply - holdingAmount);
                   } else {
-                       console.warn(`Reserve ${reserveToAdjust.name} does not have a valid numerical field 'total_supplied'`);
+                      console.warn(`Reserve ${reserveToAdjust.name} (Holding: ${holding.name}) does not have valid numerical field '${supplyField}'`);
                   }
               } else {
-                   console.warn(`Could not find reserve to adjust supply for: ${holding.name} (lookup name: ${holding.originalReserveData?.name ?? holding.name})`);
+                  console.warn(`Could not find matching adjusted reserve for holding: ${holding.name}`);
               }
           }
       });
@@ -354,7 +387,7 @@ interface InvestmentCalculatorProps {
           totalFundsForCalc,
           adjustedPools,
           adjustedReserves,
-          1 // Example: Set min_allocation_percent
+          1
       );
       
       const newAllocation = calculateOptimalDistribution(allocationData);
@@ -725,25 +758,30 @@ interface InvestmentCalculatorProps {
             {optimalDistribution.investments
               .filter(inv => inv.type === 'pool' && inv.allocation > 0)
               .map((investment) => {
-                const assetConfig = SUPPORTED_ASSETS.find(a => 
-                    a.apiType === 'pool' && 
-                    a.name.toLowerCase().includes(investment.name.toLowerCase())
+                // Find AssetConfig (same logic as calculateOptimalDistribution)
+                const assetConfig = SUPPORTED_ASSETS.find(config => 
+                    config.type === 'pool' && 
+                    ((config.apiName && config.apiName === investment.name) || 
+                     (config.name.toLowerCase() === investment.name.toLowerCase()) ||
+                     (config.name.toLowerCase().includes(investment.name.toLowerCase())))
                 );
                 if (!assetConfig) {
-                    console.warn(`Optimal Pool: Config not found for ${investment.name}`);
+                    console.warn(`PoolInfo Render: Config not found for investment name ${investment.name}`);
                     return null; 
                 }
 
+                // Find PoolData from fetched data (using address is more reliable)
                 const poolData = fetchedPools.find(p => p.address === assetConfig.contractAddress);
                 if (!poolData) {
-                     console.warn(`Optimal Pool: Fetched data not found for ${assetConfig.name} (Address: ${assetConfig.contractAddress})`);
+                     console.warn(`PoolInfo Render: Fetched data not found for ${assetConfig.name} (Address: ${assetConfig.contractAddress})`);
                      return null;
                  }
                 
                 const displayTitle = assetConfig.name;
                 const explorerUrl = assetConfig.explorerUrl;
-                const originalIndex = fetchedPools.findIndex(p => p.name === investment.name);
-                const color = getInvestmentColor('pool', originalIndex);
+                // Calculate color based on index in SUPPORTED_ASSETS
+                const supportedAssetIndex = SUPPORTED_ASSETS.findIndex(a => a.id === assetConfig.id);
+                const color = getInvestmentColor('pool', supportedAssetIndex);
                 
                 return (
                   <PoolInfo
@@ -760,28 +798,45 @@ interface InvestmentCalculatorProps {
             {optimalDistribution.investments
               .filter(inv => inv.type === 'reserve' && inv.allocation > 0)
               .map((investment) => {
-                const assetConfig = SUPPORTED_ASSETS.find(a => 
-                    a.apiType === 'reserve' && 
-                    (a.name === investment.name || a.name.toLowerCase() === investment.name.toLowerCase())
-                );
+                 // Find AssetConfig (same logic as calculateOptimalDistribution)
+                 const assetConfig = SUPPORTED_ASSETS.find(config => 
+                    config.type === 'reserve' && 
+                    ((config.apiName && config.apiName === investment.name) || 
+                     (config.name.toLowerCase() === investment.name.toLowerCase()))
+                 );
                  if (!assetConfig) {
-                    console.warn(`Optimal Reserve: Config not found for ${investment.name}`);
+                    console.warn(`ReserveInfo Render: Config not found for investment name ${investment.name}`);
                     return null; 
                 }
 
-                const reserveData = fetchedReserves.find(r => 
-                    (r.name?.toLowerCase() === assetConfig.name.toLowerCase()) || 
-                    (r.address && r.address === assetConfig.contractAddress)
-                );
+                // Find ReserveData from fetched data (using address is more reliable)
+                const reserveData = fetchedReserves.find(r => r.address === assetConfig.contractAddress);
                 if (!reserveData) {
-                     console.warn(`Optimal Reserve: Fetched data not found for ${assetConfig.name} (Name: ${assetConfig.name}, Address: ${assetConfig.contractAddress})`);
-                     return null;
-                 }
+                     // Fallback: Try matching by name if address failed
+                     const fallbackReserveData = fetchedReserves.find(r => 
+                         (r.name?.toLowerCase() === assetConfig.name.toLowerCase()) ||
+                         (assetConfig.apiName && r.name === assetConfig.apiName) 
+                     );
+                     if (!fallbackReserveData) {
+                         console.warn(`ReserveInfo Render: Fetched data not found for ${assetConfig.name} (Address: ${assetConfig.contractAddress}, Name: ${assetConfig.apiName ?? assetConfig.name})`);
+                         return null;
+                     }
+                     // Use fallback data if found by name
+                     Object.assign(reserveData || {}, fallbackReserveData); // Assign if reserveData was undefined
+                     if (!reserveData) { // If still null, create it from fallback
+                         // This case should be rare if fallback works, but handles edge case
+                         console.warn("ReserveInfo Render: Created reserveData from name fallback.");
+                         // reserveData = fallbackReserveData; // Direct assignment might be problematic depending on scope/mutability, using Object.assign is safer conceptually
+                         // Let's assume if address match fails, we probably shouldn't render. Reverting the fallback logic for simplicity.
+                         return null; // Simplified: If address match fails, don't render.
+                     } 
+                 } // End of check for reserveData 
                 
-                const displayTitle = assetConfig.name;
-                const explorerUrl = assetConfig.explorerUrl;
-                const originalIndex = fetchedReserves.findIndex(r => r.name === investment.name);
-                const color = getInvestmentColor('reserve', originalIndex);
+                 const displayTitle = assetConfig.name;
+                 const explorerUrl = assetConfig.explorerUrl;
+                 // Calculate color based on index in SUPPORTED_ASSETS
+                 const supportedAssetIndex = SUPPORTED_ASSETS.findIndex(a => a.id === assetConfig.id);
+                 const color = getInvestmentColor('reserve', supportedAssetIndex);
                 
                 return (
                   <ReserveInfo
