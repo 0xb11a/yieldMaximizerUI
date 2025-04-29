@@ -86,7 +86,7 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     underlyingTokens: [MANTLE_USDC], 
     receiptToken: MANTLE_LVUSDC,    
     apiType: 'reserve',
-    logoUrl: '/svg/lendle-logo-white.png', // Updated path
+    logoUrl: '/svg/lendle-token.svg', // Updated path to SVG
     // Add explorer URL for the lvUSDC token
     explorerUrl: 'https://mantlescan.xyz/token/0xf36afb467d1f05541d998bbbcd5f7167d67bd8fc', 
     // Display the balance of the receipt token (lvUSDC)
@@ -129,7 +129,7 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     underlyingTokens: [MANTLE_USDC],
     receiptToken: INITCAPITAL_INUSDC,
     apiType: 'reserve',
-    logoUrl: '/svg/INIT_logo_White.png', // Updated path
+    logoUrl: '/svg/initCapital.ico', // Updated path to ICO
     // Add explorer URL for the inUSDC token
     explorerUrl: 'https://mantlescan.xyz/token/0x00a55649e597d463fd212fbe48a3b40f0e227d06', 
     // Display the balance by calling InitLens.getInitPosInfos

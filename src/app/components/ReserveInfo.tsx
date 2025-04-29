@@ -62,9 +62,9 @@ export default function ReserveInfo({ title, color, reserveData, explorerUrl, lo
             <Image 
               src={logoUrl} 
               alt={`${title} logo`} 
-              width={24}
-              height={24}
-              className="rounded-full"
+              width={36}
+              height={36}
+              className="object-contain self-center ml-auto"
             />
           )}
         </div>

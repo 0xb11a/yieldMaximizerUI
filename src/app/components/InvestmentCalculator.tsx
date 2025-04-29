@@ -59,7 +59,7 @@ interface InvestmentCalculatorProps {
   walletBalances?: WalletBalance[]; 
 }
 
-  export default function InvestmentCalculator({ supplyFunds = 0, walletBalances = [] }: InvestmentCalculatorProps) {
+export default function InvestmentCalculator({ supplyFunds = 0, walletBalances = [] }: InvestmentCalculatorProps) {
   const [displayMode, setDisplayMode] = useState<'idle' | 'current' | 'optimal'>('idle');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -507,7 +507,7 @@ interface InvestmentCalculatorProps {
         }
        `}</style>
 
-      {/* Calculate Optimal Yield Button */}
+      {/* Calculate Optimal Yield Button (now takes full width again) */}
       <div className="mt-8 mb-8">
          <button
             onClick={handleOptimalAllocation}
@@ -521,7 +521,7 @@ interface InvestmentCalculatorProps {
           >
             {isLoading && displayMode === 'optimal' ? 'Calculating Optimal...' : 'Calculate Optimal Yield'}
           </button>
-       </div>
+      </div>
 
       {/* Error Display */}
       {isClient && error && (
@@ -747,113 +747,83 @@ interface InvestmentCalculatorProps {
       </div>
 
       {/* Pool & Reserves Information Section */}
+      {/* Reverted to only showing when optimalDistribution is available */}
       {displayMode === 'optimal' && optimalDistribution && (fetchedPools.length > 0 || fetchedReserves.length > 0) && (
         <>
-          <h2 className="text-xl font-bold mt-8 mb-8">Pools & Reserves Information</h2>
+          <h2 className="text-xl font-bold mt-8 mb-8">
+            Pools & Reserves Information (Optimal Allocation)
+          </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 animate-fadeIn">
             
-            {/* === START: Align Logic with Current Yield === */}
-            
-            {/* Iterate over pools included in optimal allocation */}
-            {optimalDistribution.investments
-              .filter(inv => inv.type === 'pool' && inv.allocation > 0)
-              .map((investment) => {
-                // Find AssetConfig (same logic as calculateOptimalDistribution)
-                const assetConfig = SUPPORTED_ASSETS.find(config => 
-                    config.type === 'pool' && 
-                    ((config.apiName && config.apiName === investment.name) || 
-                     (config.name.toLowerCase() === investment.name.toLowerCase()) ||
-                     (config.name.toLowerCase().includes(investment.name.toLowerCase())))
-                );
-                if (!assetConfig) {
-                    console.warn(`PoolInfo Render: Config not found for investment name ${investment.name}`);
-                    return null; 
-                }
-
-                // Find PoolData from fetched data (using address is more reliable)
-                const poolData = fetchedPools.find(p => p.address === assetConfig.contractAddress);
-                if (!poolData) {
-                     console.warn(`PoolInfo Render: Fetched data not found for ${assetConfig.name} (Address: ${assetConfig.contractAddress})`);
-                     return null;
-                 }
-                
-                const displayTitle = assetConfig.name;
-                const explorerUrl = assetConfig.explorerUrl;
-                const logoUrl = assetConfig.logoUrl;
-                // Calculate color based on index in SUPPORTED_ASSETS
-                const supportedAssetIndex = SUPPORTED_ASSETS.findIndex(a => a.id === assetConfig.id);
-                const color = getInvestmentColor('pool', supportedAssetIndex);
-                
-                return (
-                  <PoolInfo
-                    key={`info-pool-${displayTitle}`}
-                    title={displayTitle}
-                    color={color}
-                    data={poolData} 
-                    explorerUrl={explorerUrl}
-                    logoUrl={logoUrl}
-                  />
-                );
-            })}
-
-            {/* Iterate over reserves included in optimal allocation */}
-            {optimalDistribution.investments
-              .filter(inv => inv.type === 'reserve' && inv.allocation > 0)
-              .map((investment) => {
-                 // Find AssetConfig (same logic as calculateOptimalDistribution)
-                 const assetConfig = SUPPORTED_ASSETS.find(config => 
-                    config.type === 'reserve' && 
-                    ((config.apiName && config.apiName === investment.name) || 
-                     (config.name.toLowerCase() === investment.name.toLowerCase()))
-                 );
-                 if (!assetConfig) {
-                    console.warn(`ReserveInfo Render: Config not found for investment name ${investment.name}`);
-                    return null; 
-                }
-
-                // Find ReserveData from fetched data (using address is more reliable)
-                const reserveData = fetchedReserves.find(r => r.address === assetConfig.contractAddress);
-                if (!reserveData) {
-                     // Fallback: Try matching by name if address failed
-                     const fallbackReserveData = fetchedReserves.find(r => 
-                         (r.name?.toLowerCase() === assetConfig.name.toLowerCase()) ||
-                         (assetConfig.apiName && r.name === assetConfig.apiName) 
-                     );
-                     if (!fallbackReserveData) {
-                         console.warn(`ReserveInfo Render: Fetched data not found for ${assetConfig.name} (Address: ${assetConfig.contractAddress}, Name: ${assetConfig.apiName ?? assetConfig.name})`);
+            {/* Reverted to Optimal Allocation Info Logic Only */}
+            {optimalDistribution?.investments
+                .filter(inv => inv.allocation > 0) // Only show those with > 0 allocation in optimal
+                .map((investment) => {
+                  if (investment.type === 'pool') {
+                    const assetConfig = SUPPORTED_ASSETS.find(config => 
+                        config.type === 'pool' && 
+                        ((config.apiName && config.apiName === investment.name) || 
+                         (config.name.toLowerCase() === investment.name.toLowerCase()) ||
+                         (config.name.toLowerCase().includes(investment.name.toLowerCase())))
+                    );
+                    if (!assetConfig) {
+                        console.warn(`Optimal PoolInfo Render: Config not found for investment name ${investment.name}`);
+                        return null; 
+                    }
+                    const poolData = fetchedPools.find(p => p.address === assetConfig.contractAddress);
+                    if (!poolData) {
+                         console.warn(`Optimal PoolInfo Render: Fetched data not found for ${assetConfig.name} (Address: ${assetConfig.contractAddress})`);
                          return null;
-                     }
-                     // Use fallback data if found by name
-                     Object.assign(reserveData || {}, fallbackReserveData); // Assign if reserveData was undefined
-                     if (!reserveData) { // If still null, create it from fallback
-                         // This case should be rare if fallback works, but handles edge case
-                         console.warn("ReserveInfo Render: Created reserveData from name fallback.");
-                         // reserveData = fallbackReserveData; // Direct assignment might be problematic depending on scope/mutability, using Object.assign is safer conceptually
-                         // Let's assume if address match fails, we probably shouldn't render. Reverting the fallback logic for simplicity.
-                         return null; // Simplified: If address match fails, don't render.
-                     } 
-                 } // End of check for reserveData 
-                
-                 const displayTitle = assetConfig.name;
-                 const explorerUrl = assetConfig.explorerUrl;
-                 const logoUrl = assetConfig.logoUrl;
-                 // Calculate color based on index in SUPPORTED_ASSETS
-                 const supportedAssetIndex = SUPPORTED_ASSETS.findIndex(a => a.id === assetConfig.id);
-                 const color = getInvestmentColor('reserve', supportedAssetIndex);
-                
-                return (
-                  <ReserveInfo
-                    key={`info-reserve-${displayTitle}`}
-                    title={displayTitle}
-                    color={color}
-                    reserveData={reserveData} 
-                    explorerUrl={explorerUrl}
-                    logoUrl={logoUrl}
-                  />
-                );
-            })}
-            
-            {/* === END: Align Logic with Current Yield === */}
+                    }
+                    const displayTitle = assetConfig.name;
+                    const explorerUrl = assetConfig.explorerUrl;
+                    const logoUrl = assetConfig.logoUrl;
+                    const supportedAssetIndex = SUPPORTED_ASSETS.findIndex(a => a.id === assetConfig.id);
+                    const color = getInvestmentColor('pool', supportedAssetIndex);
+                    return (
+                      <PoolInfo
+                        key={`info-pool-${displayTitle}`}
+                        title={displayTitle}
+                        color={color}
+                        data={poolData}
+                        explorerUrl={explorerUrl}
+                        logoUrl={logoUrl}
+                      />
+                    );
+                  } else { // investment.type === 'reserve'
+                    const assetConfig = SUPPORTED_ASSETS.find(config => 
+                        config.type === 'reserve' && 
+                        ((config.apiName && config.apiName === investment.name) || 
+                         (config.name.toLowerCase() === investment.name.toLowerCase()))
+                     );
+                     if (!assetConfig) {
+                        console.warn(`Optimal ReserveInfo Render: Config not found for investment name ${investment.name}`);
+                        return null; 
+                    }
+                    const reserveData = fetchedReserves.find(r => r.address === assetConfig.contractAddress);
+                    if (!reserveData) {
+                         // Simplified existing logic: If address match fails, don't render.
+                         console.warn(`Optimal ReserveInfo Render: Fetched data not found for ${assetConfig.name} (Address: ${assetConfig.contractAddress})`);
+                         return null;
+                    }
+                     const displayTitle = assetConfig.name;
+                     const explorerUrl = assetConfig.explorerUrl;
+                     const logoUrl = assetConfig.logoUrl;
+                     const supportedAssetIndex = SUPPORTED_ASSETS.findIndex(a => a.id === assetConfig.id);
+                     const color = getInvestmentColor('reserve', supportedAssetIndex);
+                    return (
+                      <ReserveInfo
+                        key={`info-reserve-${displayTitle}`}
+                        title={displayTitle}
+                        color={color}
+                        reserveData={reserveData}
+                        explorerUrl={explorerUrl}
+                        logoUrl={logoUrl}
+                      />
+                    );
+                  }
+              }) 
+            }
 
           </div>
         </>
