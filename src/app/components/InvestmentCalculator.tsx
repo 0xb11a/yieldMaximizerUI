@@ -307,16 +307,39 @@ interface InvestmentCalculatorProps {
           const holdingAmount = holding.balance;
 
           if (holding.type === 'pool') {
-              console.log(`Skipping adjustment for pool: ${holding.name}`);
+              // --- ADJUSTED LOGIC FOR POOLS ---
+              const poolToAdjust = adjustedPools.find(p =>
+                  (holding.originalPoolData && p.address === holding.originalPoolData.address) || // Prefer matching by original address
+                  (p.name?.toLowerCase() === holding.name.toLowerCase()) // Fallback to name match
+              );
+              if (poolToAdjust) {
+                  // Use 'pool_distribution' as the liquidity field
+                  const liquidityField = 'pool_distribution'; // Confirmed field name
+                  if (liquidityField in poolToAdjust && typeof poolToAdjust[liquidityField] === 'number') {
+                      const currentLiquidity = poolToAdjust[liquidityField];
+                      console.log(`Adjusting pool ${poolToAdjust.name}: reducing ${liquidityField} (${currentLiquidity}) by ${holdingAmount}`);
+                      poolToAdjust[liquidityField] = Math.max(0, currentLiquidity - holdingAmount);
+                  } else {
+                      console.warn(`Pool ${poolToAdjust.name} does not have a valid numerical field '${liquidityField}'`);
+                  }
+              } else {
+                  console.warn(`Could not find pool to adjust liquidity for: ${holding.name} (lookup name: ${holding.originalPoolData?.name ?? holding.name})`);
+              }
+              // --- END ADJUSTED LOGIC ---
 
           } else if (holding.type === 'reserve') {
                const reserveToAdjust = adjustedReserves.find(r =>
-                  (holding.originalReserveData && r.name === holding.originalReserveData.name) ||
-                  (r.name?.toLowerCase() === holding.name.toLowerCase())
+                  (holding.originalReserveData && r.name === holding.originalReserveData.name) || // Match by original data if available
+                  (r.name?.toLowerCase() === holding.name.toLowerCase()) // Fallback to matching by name (case-insensitive)
                );
               if (reserveToAdjust) {
+                  // Assuming 'total_supplied' is the correct field for reserves
+                  if ('total_supplied' in reserveToAdjust && typeof reserveToAdjust.total_supplied === 'number') {
                   console.log(`Adjusting reserve ${reserveToAdjust.name}: reducing total_supplied (${reserveToAdjust.total_supplied}) by ${holdingAmount}`);
                   reserveToAdjust.total_supplied = Math.max(0, reserveToAdjust.total_supplied - holdingAmount);
+                  } else {
+                       console.warn(`Reserve ${reserveToAdjust.name} does not have a valid numerical field 'total_supplied'`);
+                  }
               } else {
                    console.warn(`Could not find reserve to adjust supply for: ${holding.name} (lookup name: ${holding.originalReserveData?.name ?? holding.name})`);
               }
@@ -554,11 +577,11 @@ interface InvestmentCalculatorProps {
                 {optimalAllocation.map((item: AllocationItem) => {
                   const formatPercent = (value: number | undefined) => value !== undefined ? `${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : '-';
                   const formatCurrency = (value: number | undefined) => value !== undefined ? `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-';
-                  return (
+                                    return (
                     <div key={`optimal-${item.name}`} className={`flex flex-col lg:flex-row lg:items-center transition-colors duration-150 text-sm py-2 border-b border-gray-800 lg:border-none last:border-b-0`}>
                       <div className="flex items-center gap-2 p-1 mb-1 lg:mb-0 lg:flex-[2]">
                         <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }}/>
-                        <span className="text-white font-medium break-words">{item.name}</span> 
+                        <span className="text-white font-medium break-words">{item.name}</span>
                       </div>
                       {/* Mobile Data View */}
                       <div className="block lg:hidden pl-5 space-y-1 text-xs">
@@ -591,25 +614,25 @@ interface InvestmentCalculatorProps {
                   );
                 })}
               </div>
-              {/* Total Profit Comparison */}
-              {optimalDistribution && (
-                <div className="pt-4 mt-auto border-t border-[#1E2633] space-y-1">
-                  {currentTotalProfit > 0 && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-400 flex-[2]">Current Yearly Profit</span>
-                      <span className="text-gray-400 text-right">
-                        ${currentTotalProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {/* Total Profit Comparison */}
+                {optimalDistribution && (
+                  <div className="pt-4 mt-auto border-t border-[#1E2633] space-y-1">
+                    {currentTotalProfit > 0 && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-400 flex-[2]">Current Yearly Profit</span>
+                        <span className="text-gray-400 text-right">
+                          ${currentTotalProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between">
+                      <span className="text-[#34D399] font-semibold flex-[2]">Optimal Yearly Profit</span>
+                      <span className="text-[#34D399] font-semibold text-right">
+                        ${optimalDistribution.total_profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </div>
-                  )}
-                  <div className="flex items-center justify-between">
-                    <span className="text-[#34D399] font-semibold flex-[2]">Optimal Yearly Profit</span>
-                    <span className="text-[#34D399] font-semibold text-right">
-                      ${optimalDistribution.total_profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
                   </div>
-                </div>
-              )}
+                )}
             </div>
           </div>
         )}
@@ -778,4 +801,4 @@ interface InvestmentCalculatorProps {
       )}
     </div>
   );
-} 
+}
