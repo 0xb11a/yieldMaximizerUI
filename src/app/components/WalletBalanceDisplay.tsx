@@ -1,24 +1,29 @@
 'use client';
 
 import React from 'react';
-import { AssetData } from '@/types'; 
+// Remove AssetData import if not used directly, BalanceDisplayItem will be imported
+// import { AssetData } from '@/types'; 
 import { Address, formatUnits } from 'viem'; 
+// Import the shared type definition
+import { BalanceDisplayItem } from '@/types';
 
-// Interface for the balance data passed from the page
+// --- REMOVE Local Interface Definition --- 
+/*
 interface BalanceDisplayItem extends AssetData {
-  value: bigint | undefined | null; // Raw bigint value from hook
+  value: bigint | undefined | null; 
   isLoading: boolean;
   isError: boolean;
-  color: string; // Expect color from props
+  color: string; 
 }
+*/
 
-// Props received from the page component
+// Props received from the page component (Uses imported BalanceDisplayItem)
 interface WalletBalanceDisplayProps {
   manualAddress: string;
   isManualAddressValid: boolean;
   onManualAddressChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   displayAddress: Address | undefined;
-  balanceDisplayData: BalanceDisplayItem[]; // Array of balance data to display
+  balanceDisplayData: BalanceDisplayItem[]; // Use imported type
 }
 
 export default function WalletBalanceDisplay({
@@ -26,12 +31,29 @@ export default function WalletBalanceDisplay({
   isManualAddressValid,
   onManualAddressChange,
   displayAddress,
-  balanceDisplayData
+  balanceDisplayData // Type is now the imported one
 }: WalletBalanceDisplayProps) {
 
   const addressDisplayText = displayAddress
      ? `${displayAddress.substring(0, 6)}...${displayAddress.substring(displayAddress.length - 4)}`
      : 'N/A';
+
+  // Helper function simplified - only handles bigint | undefined | null
+  const formatBalanceValue = (value: bigint | undefined | null, decimals: number): string => {
+    if (value === null || value === undefined) return '0.00'; 
+    try {
+        // Direct formatting with formatUnits
+        const formatted = formatUnits(value, decimals);
+        // Use toLocaleString for potentially better display formatting (commas, etc.)
+        return parseFloat(formatted).toLocaleString(undefined, { 
+            minimumFractionDigits: 2, 
+            maximumFractionDigits: 10 // Increase max digits for precision
+        });
+    } catch (error) {
+      console.error("Error formatting balance value:", value, error);
+      return 'Error'; // Indicate formatting error
+    }
+  };
 
   return (
     <div className="card p-8">
@@ -84,7 +106,9 @@ export default function WalletBalanceDisplay({
 
               {/* Map Items */}
               {balanceDisplayData.length > 0 ? balanceDisplayData.map((balInfo, index) => {
-                 const formattedBalance = formatUnits(balInfo.value ?? BigInt(0), balInfo.decimals);
+                 // Use the simplified helper function
+                 const displayBalance = formatBalanceValue(balInfo.value, balInfo.decimals);
+                 const isFormatError = displayBalance === 'Error'; 
 
                  return (
                     // Apply item container styling from InvestmentCalculator
@@ -103,12 +127,12 @@ export default function WalletBalanceDisplay({
                       <div className="block lg:hidden pl-5 space-y-1 text-xs">
                           <div className="flex justify-between">
                               <span className='text-[#9CA3AF]'>Balance:</span>
-                           {balInfo.isError ? (
+                           {balInfo.isError || isFormatError ? ( // Check for fetch error OR format error
                              <span className="text-red-500 text-xs">Error</span>
-                              ) : balInfo.isLoading ? (
+                           ) : balInfo.isLoading ? (
                              <span className="text-gray-500 text-xs animate-pulse">...</span>
                            ) : (
-                                <span className="text-white font-medium">{`$${parseFloat(formattedBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 10 })}`}</span>
+                                <span className="text-white font-medium">{`$${displayBalance}`}</span> // Use formatted value
                            )}
                          </div>
                        </div>
@@ -117,12 +141,12 @@ export default function WalletBalanceDisplay({
                       <div className="hidden lg:flex flex-1 justify-end gap-2 lg:gap-3 p-1">
                            {/* Balance/Status Column */} 
                            <div className="w-24 text-right"> {/* Match width roughly */} 
-                               {balInfo.isError ? (
+                               {balInfo.isError || isFormatError ? ( // Check for fetch error OR format error
                                  <span className="text-red-500 text-xs">Error</span>
                                ) : balInfo.isLoading ? (
                                  <span className="text-gray-500 text-xs animate-pulse">...</span>
                                ) : (
-                                 <span className="text-white">{`$${parseFloat(formattedBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 10 })}`}</span>
+                                 <span className="text-white">{`$${displayBalance}`}</span> // Use formatted value
                                )}
                            </div>
                       </div>

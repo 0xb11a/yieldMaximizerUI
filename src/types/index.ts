@@ -1,3 +1,6 @@
+import { Address } from 'viem';
+import { TokenInfo } from '@/config/assets'; // Assuming TokenInfo is exported
+
 export interface AssetData {
   assetId?: string
   assetType?: string
@@ -11,13 +14,32 @@ export interface AssetData {
   address: string 
 }
 
-// Add this interface
+// Consolidated interface for displaying balances in the UI
+export interface BalanceDisplayItem {
+  id: string; 
+  name: string; 
+  symbol: string; 
+  decimals: number; 
+  address: Address; // Address of the token whose balance is shown OR underlying token for MM pool
+  
+  // Value should now consistently be bigint or undefined/null
+  value: bigint | undefined | null; 
+
+  isLoading: boolean;
+  isError: boolean;
+  color: string; 
+  underlyingTokens?: TokenInfo[]; // Keep for potential future use
+  // Inherit other fields from AssetData if necessary, e.g., using `extends AssetData` 
+  // if AssetData is imported and defined appropriately.
+}
+
+// Type for wallet balance data used in calculations
 export interface WalletBalance {
-  address: string;
-  symbol: string;
-  name: string;
-  decimals: number;
-  value: bigint;
+    address: Address; // Address of the token 
+    symbol: string;
+    name: string; 
+    decimals: number;
+    value: bigint; 
 }
 
 // You can add other shared types here as your project grows. 

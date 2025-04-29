@@ -51,22 +51,22 @@ export interface AssetConfig {
 
 
 // --- Define Common Tokens (Reusable) ---
-const MANTLE_USDC: TokenInfo = {
+export const MANTLE_USDC: TokenInfo = {
     address: '0x09bc4e0d864854c6afb6eb9a9cdf58ac190d0df9',
     symbol: 'USDC',
     decimals: 6,
 };
-const MANTLE_LVUSDC: TokenInfo = {
+export const MANTLE_LVUSDC: TokenInfo = {
     address: '0xf36afb467d1f05541d998bbbcd5f7167d67bd8fc',
     symbol: 'lvUSDC',
     decimals: 6,
 };
-const MANTLE_USDT: TokenInfo = {
+export const MANTLE_USDT: TokenInfo = {
     address: '0x201eba5cc46d216ce6dc03f6a759e8e766e956ae',
     symbol: 'USDT',
     decimals: 6, // Assuming USDT also has 6 decimals on Mantle
 };
-const INITCAPITAL_INUSDC: TokenInfo = {
+export const INITCAPITAL_INUSDC: TokenInfo = {
     address: '0x00a55649e597d463fd212fbe48a3b40f0e227d06',
     symbol: 'inUSDC',
     decimals: 6, // CORRECTED: Decimals confirmed as 6
@@ -162,6 +162,8 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     apiType: 'pool',
     // Add explorer URL for the pool contract
     explorerUrl: 'https://mantlescan.xyz/address/0x48c1a89af1102cad358549e9bb16ae5f96cddfec', 
+    // NOTE: Balance for this LBPair pool requires complex calculation.
+    // Use the `useMMPoolBalance` hook directly in the UI component.
     /* // Temporarily disable balance display for this pool
     balanceDisplayConfig: {
         tokenAddress: '0x48c1a89af1102cad358549e9bb16ae5f96cddfec', // Assuming LP address = pool address
