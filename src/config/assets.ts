@@ -48,6 +48,7 @@ export interface AssetConfig {
   // Type to send to the /fetch-pool-data API
   apiType: 'pool' | 'reserve';
   apiName?: string; // Optional: Name expected in the API response if different from display 'name'
+  allocationKey: string; // Unique key from the /calculate-optimal-allocation API response
 }
 
 
@@ -81,14 +82,16 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     id: 'lendle-usdc',
     name: 'Lendle USDC Reserve',
     type: 'reserve',
-    source: 'lendle',
+    source: 'Lendle Mantle',
     contractAddress: MANTLE_USDC.address, 
     underlyingTokens: [MANTLE_USDC], 
     receiptToken: MANTLE_LVUSDC,    
     apiType: 'reserve',
+    apiName: 'USDC Reserve',
     logoUrl: '/svg/lendle-token.svg', // Updated path to SVG
     // Add explorer URL for the lvUSDC token
-    explorerUrl: 'https://mantlescan.xyz/token/0xf36afb467d1f05541d998bbbcd5f7167d67bd8fc', 
+    explorerUrl: 'https://mantlescan.xyz/token/0xf36afb467d1f05541d998bbbcd5f7167d67bd8fc',
+    allocationKey: 'USDC Reserve Lendle Mantle', // Key from /calculate-optimal-allocation API
     // Display the balance of the receipt token (lvUSDC)
     balanceDisplayConfig: {
         tokenAddress: MANTLE_LVUSDC.address,
@@ -109,6 +112,7 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     receiptToken: undefined, 
     apiType: 'reserve', 
     logoUrl: undefined, // No logo for wallet USDC? Keeping undefined.
+    allocationKey: 'PLACEHOLDER_WALLET_USDC_KEY', // Wallet USDC likely not returned by allocation API
     // Display the balance of the underlying token (USDC)
     balanceDisplayConfig: {
         tokenAddress: MANTLE_USDC.address,
@@ -122,8 +126,8 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     id: 'initcapital-usdc',
     name: 'InitCapital USDC Reserve',
     type: 'reserve',
-    source: 'init',
-    apiName: 'init USDC Reserve',
+    source: 'Init Mantle',
+    apiName: 'USDC Reserve',
     // API identifies this reserve by the underlying token address
     contractAddress: MANTLE_USDC.address,
     underlyingTokens: [MANTLE_USDC],
@@ -131,7 +135,8 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     apiType: 'reserve',
     logoUrl: '/svg/initCapital.ico', // Updated path to ICO
     // Add explorer URL for the inUSDC token
-    explorerUrl: 'https://mantlescan.xyz/token/0x00a55649e597d463fd212fbe48a3b40f0e227d06', 
+    explorerUrl: 'https://mantlescan.xyz/token/0x00a55649e597d463fd212fbe48a3b40f0e227d06',
+    allocationKey: 'USDC Reserve Init Mantle', // Key from /calculate-optimal-allocation API
     // Display the balance by calling InitLens.getInitPosInfos
     balanceDisplayConfig: {
         tokenAddress: '0x4725e220163e0b90b40dd5405ee08718523dea78', // InitLens contract address
@@ -153,10 +158,11 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     id: 'merchantmoe-usdc-usdt',
     name: 'Merchant Moe USDC-USDT Pool',
     type: 'pool',
-    source: 'merchantmoe',
+    source: 'Merchant Moe Mantle',
     // Pool contract address confirmed from screenshot
     contractAddress: '0x48c1a89af1102cad358549e9bb16ae5f96cddfec',
     underlyingTokens: [MANTLE_USDC, MANTLE_USDT],
+    apiName: 'USDC-USDT',
     logoUrl: '/svg/merchant-moe-logo.ea3ba2549690769a8d68.png', // Updated path
     // TODO: Verify LP token address, symbol, and decimals. Assuming LP address = pool address for now.
     receiptToken: {
@@ -165,6 +171,7 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
         decimals: 18, // Placeholder decimals
     }, 
     apiType: 'pool',
+    allocationKey: 'USDC-USDT Merchant Moe Mantle', // Key from /calculate-optimal-allocation API
     // Add explorer URL for the pool contract
     explorerUrl: 'https://mantlescan.xyz/address/0x48c1a89af1102cad358549e9bb16ae5f96cddfec', 
     // NOTE: Balance for this LBPair pool requires complex calculation.

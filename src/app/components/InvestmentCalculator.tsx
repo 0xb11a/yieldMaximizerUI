@@ -11,7 +11,7 @@ import {
   type Reserve,
   type Investment
 } from '@/config/apiConfig';
-import { SUPPORTED_ASSETS } from '@/config/assets';
+import { SUPPORTED_ASSETS, type AssetConfig } from '@/config/assets';
 import { WalletBalance } from '@/types'; 
 import { getInvestmentColor } from '@/styles/colors';
 import { formatUnits } from 'viem'; 
@@ -80,38 +80,50 @@ export default function InvestmentCalculator({ supplyFunds = 0, walletBalances =
 
     const calculatedAllocation: AllocationItem[] = investments
       .filter(investment => investment.allocation > 0)
-      .map((investment) => {
-        // Find the corresponding AssetConfig
-        const assetConfig = SUPPORTED_ASSETS.find(config => {
-            if (config.type !== investment.type) return false;
-            // Match API name first, then config name (case-insensitive)
-            return (config.apiName && config.apiName === investment.name) || 
-                   (config.name.toLowerCase() === investment.name.toLowerCase()) ||
-                   // Added fallback for pool name differences (e.g., "USDC-USDT" vs "Merchant Moe USDC-USDT Pool")
-                   (config.type === 'pool' && config.name.toLowerCase().includes(investment.name.toLowerCase())); 
-        });
+      .map((investment: Investment) => {
+        // Find the corresponding AssetConfig using the allocationKey
+        const assetConfig = SUPPORTED_ASSETS.find(
+          config => config.allocationKey === investment.name
+        );
+
+        if (!assetConfig) {
+          console.warn(`Optimal Calc: AssetConfig not found for allocationKey: ${investment.name}`);
+          // Decide how to handle missing config: skip, use default, etc.
+          // For now, try using the investment name directly, but this might lack details
+          return {
+            name: investment.name,
+            percentage: parseFloat(((investment.allocation / validTotalFunds) * 100).toFixed(2)),
+            color: getInvestmentColor(investment.type, -1), // Fallback color
+            type: investment.type,
+            expected_return: investment.total_apr ?? 0, // Use total_apr (assuming APY calculation is done elsewhere or APR is sufficient)
+            allocation: investment.allocation,
+            expectedProfit: investment.expectedProfit ?? 0, // Use expectedProfit
+            reserve_apy: investment.base_apr, // Use base_apr (assuming APY calc is elsewhere)
+            rewards_apy: investment.rewards_apy, // Use rewards_apy directly
+            total_apr: investment.total_apr, // Map total_apr
+            base_apr: investment.base_apr,     // Map base_apr
+            rewards_apr: investment.rewards_apr, // Map rewards_apr
+          };
+        }
 
         // Determine the index within SUPPORTED_ASSETS for consistent coloring
-        const supportedAssetIndex = assetConfig 
-            ? SUPPORTED_ASSETS.findIndex(a => a.id === assetConfig.id) 
-            : -1; // Fallback index if no config found
+        const supportedAssetIndex = SUPPORTED_ASSETS.findIndex(a => a.id === assetConfig.id);
 
-        const displayName = assetConfig?.name ?? investment.name; // Use config name if found
+        const displayName = assetConfig.name; // Always use config name for display
 
         return {
             name: displayName,
             percentage: parseFloat(((investment.allocation / validTotalFunds) * 100).toFixed(2)),
-            // Use index from SUPPORTED_ASSETS for color
-            color: getInvestmentColor(investment.type, supportedAssetIndex),
-            type: investment.type,
-            expected_return: investment.expected_return,
+            color: getInvestmentColor(assetConfig.type, supportedAssetIndex),
+            type: assetConfig.type, // Use type from config
+            expected_return: investment.total_apr ?? 0, // Use total_apr (assuming APY calc is elsewhere)
             allocation: investment.allocation,
-            expectedProfit: investment.expectedProfit,
-            reserve_apy: investment.reserve_apy,
-            rewards_apy: investment.rewards_apy,
-            total_apr: investment.total_apr,
-            base_apr: investment.base_apr,
-            rewards_apr: investment.rewards_apr
+            expectedProfit: investment.expectedProfit ?? 0, // Use expectedProfit
+            reserve_apy: investment.base_apr, // Use base_apr (assuming APY calc is elsewhere)
+            rewards_apy: investment.rewards_apy, // Use rewards_apy directly
+            total_apr: investment.total_apr, // Map total_apr
+            base_apr: investment.base_apr,     // Map base_apr
+            rewards_apr: investment.rewards_apr, // Map rewards_apr
         };
       });
 
@@ -177,39 +189,42 @@ export default function InvestmentCalculator({ supplyFunds = 0, walletBalances =
              }
 
              let baseData: Pool | Reserve | undefined;
-             if (assetConfig.apiType === 'pool') {
-                 baseData = localFetchedPools.find(p => p.address === assetConfig.contractAddress); 
-             } else { 
-                  baseData = localFetchedReserves.find(r => 
-                      (r.name?.toLowerCase() === assetConfig.name.toLowerCase())
-                      || (r.address && r.address === assetConfig.contractAddress) 
-                  );
-             }
-
-             let matchedApyDetail: Investment | undefined;
-             if (assetConfig.source === 'merchantmoe' && assetConfig.apiType === 'pool') {
-                 matchedApyDetail = apyData.investments.find(detail =>
-                     detail.name === "USDC-USDT" && detail.type === 'pool'
+             if (assetConfig.type === 'pool') {
+                 // Match base data using source and apiName from config
+                 baseData = localFetchedPools.find(p =>
+                     p.source === assetConfig.source &&
+                     p.name === assetConfig.apiName
                  );
              } else {
-                 const nameToMatch = (assetConfig.apiName ?? assetConfig.name).toLowerCase();
-                 matchedApyDetail = apyData.investments.find(detail =>
-                     detail.name.toLowerCase() === nameToMatch && detail.type === assetConfig.apiType
-                 );
+                   // Match base data using source and apiName from config
+                   baseData = localFetchedReserves.find(r =>
+                       r.source === assetConfig.source &&
+                       r.name === assetConfig.apiName
+                   );
              }
-             if (!matchedApyDetail && assetConfig.name !== 'Wallet USDC') { 
-                  console.warn(`No matching APY data found for config: ${assetConfig.name} ...`);
+             if (!baseData) {
+                 // Fallback removed - matching should now work correctly if types/API response includes source/name
+                 console.warn(`Current Yield: No matching base data found for config: ${assetConfig.name} (Source: ${assetConfig.source}, apiName: ${assetConfig.apiName})`);
+             }
+
+             // Match APY data using the allocationKey
+             const matchedApyDetail: Investment | undefined = apyData.investments.find(
+                 (detail: Investment) => detail.name === assetConfig.allocationKey
+             );
+
+             if (!matchedApyDetail && assetConfig.allocationKey !== 'PLACEHOLDER_WALLET_USDC_KEY') { // Avoid warning for wallet
+                  console.warn(`Current Yield: No matching APY data found for allocationKey: ${assetConfig.allocationKey} (Config: ${assetConfig.name})`);
              }
 
              const itemData: Partial<CurrentYieldItem> = {
                  name: assetConfig.name,
-                 symbol: balance.symbol, 
+                 symbol: balance.symbol,
                  balance: parseFloat(formatUnits(balance.value, balance.decimals)),
                  color: '#8884d8',
                  type: assetConfig.type,
-                 originalPoolData: assetConfig.apiType === 'pool' ? baseData as Pool : undefined,
-                 originalReserveData: assetConfig.apiType === 'reserve' ? baseData as Reserve : undefined,
-                 expected_return: 0, 
+                 originalPoolData: assetConfig.type === 'pool' ? baseData as Pool : undefined,
+                 originalReserveData: assetConfig.type === 'reserve' ? baseData as Reserve : undefined,
+                 expected_return: 0,
                  reserve_apy: 0,
                  rewards_apy: 0,
                  expectedYearlyProfit: 0,
@@ -220,17 +235,19 @@ export default function InvestmentCalculator({ supplyFunds = 0, walletBalances =
              itemData.balance = balanceInUsd; 
              
              if (matchedApyDetail) {
-                 itemData.reserve_apy = matchedApyDetail.reserve_apy ?? 0;
+                 // Use the fields already mapped in fetchOptimalAllocation
+                 itemData.reserve_apy = matchedApyDetail.reserve_apy ?? 0; // Contains base_apy
                  itemData.rewards_apy = matchedApyDetail.rewards_apy ?? 0;
-                 itemData.expected_return = itemData.reserve_apy + itemData.rewards_apy;
+                 itemData.expected_return = matchedApyDetail.expected_return ?? 0; // Contains total_apy
                  itemData.total_apr = matchedApyDetail.total_apr;
                  itemData.base_apr = matchedApyDetail.base_apr;
                  itemData.rewards_apr = matchedApyDetail.rewards_apr;
-                 itemData.expectedYearlyProfit = balanceInUsd * (itemData.expected_return / 100);
+                 itemData.expectedYearlyProfit = balanceInUsd * ((itemData.expected_return ?? 0) / 100);
                  totalCalculatedProfit += itemData.expectedYearlyProfit;
              } 
              const originalIndex = SUPPORTED_ASSETS.findIndex(a => a.id === assetConfig.id);
              itemData.color = getInvestmentColor(assetConfig.type, originalIndex);
+
              return itemData as CurrentYieldItem; 
        });
     
@@ -312,32 +329,38 @@ export default function InvestmentCalculator({ supplyFunds = 0, walletBalances =
       const adjustedReserves = JSON.parse(JSON.stringify(fetchedReserves)) as Reserve[];
 
       const findAdjustedReserve = (holding: CurrentYieldItem): Reserve | undefined => {
-        const assetConfig = SUPPORTED_ASSETS.find(a =>
-          a.type === 'reserve' &&
-          (a.name === holding.name || a.receiptToken?.symbol === holding.symbol)
+        const assetConfig = SUPPORTED_ASSETS.find(a => a.name === holding.name);
+        if (!assetConfig || assetConfig.type !== 'reserve') {
+            console.warn(`Adjust Reserve: Could not find reserve AssetConfig for holding: ${holding.name}`);
+            return undefined;
+        }
+
+        // Match using source and apiName from config against fetched reserve data
+        // IMPORTANT: Assumes 'source' field exists in the Reserve type (needs adding to apiConfig.ts)
+        let reserve = adjustedReserves.find(r =>
+             r.source === assetConfig.source &&
+             r.name === assetConfig.apiName
         );
-        return adjustedReserves.find(r => {
-            // Priority 1: Match apiName first if available
-            if (assetConfig?.apiName && r.name === assetConfig.apiName) return true;
-            // Priority 2: Match original data name if available
-            if (holding.originalReserveData?.name && r.name === holding.originalReserveData.name) return true;
-            // Priority 3: Match holding display name (case-insensitive)
-            if (r.name?.toLowerCase() === holding.name.toLowerCase()) return true;
-            // Priority 4: Fallback to address matching (config vs api return)
-            if (assetConfig?.contractAddress && r.address && r.address === assetConfig.contractAddress) return true;
-            if (holding.originalReserveData?.address && r.address && r.address === holding.originalReserveData.address) return true;
-            return false;
-        });
+
+        if (!reserve) {
+            console.warn(`Adjust Reserve: Could not find matching reserve for ${assetConfig.name} (Source: ${assetConfig.source}, apiName: ${assetConfig.apiName})`);
+        }
+        return reserve;
       };
 
       const findAdjustedPool = (holding: CurrentYieldItem): Pool | undefined => {
-         return adjustedPools.find(p => {
-            if (holding.originalPoolData?.address && p.address === holding.originalPoolData.address) return true;
-            if (p.name?.toLowerCase() === holding.name.toLowerCase()) return true;
-            const assetConfig = SUPPORTED_ASSETS.find(a => a.type === 'pool' && a.name === holding.name);
-            if (assetConfig?.contractAddress && p.address && p.address === assetConfig.contractAddress) return true;
-            return false;
-        });
+         const assetConfig = SUPPORTED_ASSETS.find(a => a.name === holding.name);
+         if (!assetConfig || assetConfig.type !== 'pool') {
+             console.warn(`Adjust Pool: Could not find pool AssetConfig for holding: ${holding.name}`);
+             return undefined;
+         }
+
+         // Match using source and apiName from config against fetched pool data
+         // IMPORTANT: Assumes 'source' field exists in the Pool type (needs adding to apiConfig.ts)
+         return adjustedPools.find(p =>
+             p.source === assetConfig.source &&
+             p.name === assetConfig.apiName
+         );
       };
 
       // --- Main loop using helper functions ---
@@ -354,7 +377,8 @@ export default function InvestmentCalculator({ supplyFunds = 0, walletBalances =
                   const liquidityField = 'pool_distribution';
                   if (liquidityField in poolToAdjust && typeof poolToAdjust[liquidityField] === 'number') {
                       const currentLiquidity = poolToAdjust[liquidityField];
-                      console.log(`Adjusting pool ${poolToAdjust.name}: reducing ${liquidityField} (${currentLiquidity}) by ${holdingAmount}`);
+                      // Include pool name and source (if available) in log
+                      console.log(`Adjusting pool ${poolToAdjust.name} (${poolToAdjust.source ?? 'Unknown Source'}): reducing ${liquidityField} (${currentLiquidity}) by ${holdingAmount}`);
                       poolToAdjust[liquidityField] = Math.max(0, currentLiquidity - holdingAmount);
                   } else {
                       console.warn(`Pool ${poolToAdjust.name} (Holding: ${holding.name}) does not have valid numerical field '${liquidityField}'`);
@@ -368,7 +392,8 @@ export default function InvestmentCalculator({ supplyFunds = 0, walletBalances =
                   const supplyField = 'total_supplied';
                   if (supplyField in reserveToAdjust && typeof reserveToAdjust[supplyField] === 'number') {
                       const currentSupply = reserveToAdjust[supplyField];
-                      console.log(`Adjusting reserve ${reserveToAdjust.name}: reducing ${supplyField} (${currentSupply}) by ${holdingAmount}`);
+                      // Include reserve name and source in log for clarity
+                      console.log(`Adjusting reserve ${reserveToAdjust.name} (${reserveToAdjust.source ?? 'Unknown Source'}): reducing ${supplyField} (${currentSupply}) by ${holdingAmount}`);
                       reserveToAdjust[supplyField] = Math.max(0, currentSupply - holdingAmount);
                   } else {
                       console.warn(`Reserve ${reserveToAdjust.name} (Holding: ${holding.name}) does not have valid numerical field '${supplyField}'`);
@@ -758,21 +783,26 @@ export default function InvestmentCalculator({ supplyFunds = 0, walletBalances =
             {/* Reverted to Optimal Allocation Info Logic Only */}
             {optimalDistribution?.investments
                 .filter(inv => inv.allocation > 0) // Only show those with > 0 allocation in optimal
-                .map((investment) => {
-                  if (investment.type === 'pool') {
-                    const assetConfig = SUPPORTED_ASSETS.find(config => 
-                        config.type === 'pool' && 
-                        ((config.apiName && config.apiName === investment.name) || 
-                         (config.name.toLowerCase() === investment.name.toLowerCase()) ||
-                         (config.name.toLowerCase().includes(investment.name.toLowerCase())))
+                .map((investment: Investment) => {
+                  // Find AssetConfig using allocationKey
+                  const assetConfig = SUPPORTED_ASSETS.find(config =>
+                      config.allocationKey === investment.name
+                  );
+
+                  if (!assetConfig) {
+                      console.warn(`Optimal Info Render: Config not found for investment key ${investment.name}`);
+                      return null;
+                  }
+
+                  // Now find the corresponding base data (pool or reserve) using source and name
+                  // IMPORTANT: Assumes 'source' field exists in Pool/Reserve types (needs adding to apiConfig.ts)
+                  if (assetConfig.type === 'pool') {
+                    const poolData = fetchedPools.find(p =>
+                        p.source === assetConfig.source &&
+                        p.name === assetConfig.apiName
                     );
-                    if (!assetConfig) {
-                        console.warn(`Optimal PoolInfo Render: Config not found for investment name ${investment.name}`);
-                        return null; 
-                    }
-                    const poolData = fetchedPools.find(p => p.address === assetConfig.contractAddress);
                     if (!poolData) {
-                         console.warn(`Optimal PoolInfo Render: Fetched data not found for ${assetConfig.name} (Address: ${assetConfig.contractAddress})`);
+                         console.warn(`Optimal PoolInfo Render: Fetched data not found for ${assetConfig.name} (Source: ${assetConfig.source}, apiName: ${assetConfig.apiName})`);
                          return null;
                     }
                     const displayTitle = assetConfig.name;
@@ -790,20 +820,13 @@ export default function InvestmentCalculator({ supplyFunds = 0, walletBalances =
                         logoUrl={logoUrl}
                       />
                     );
-                  } else { // investment.type === 'reserve'
-                    const assetConfig = SUPPORTED_ASSETS.find(config => 
-                        config.type === 'reserve' && 
-                        ((config.apiName && config.apiName === investment.name) || 
-                         (config.name.toLowerCase() === investment.name.toLowerCase()))
-                     );
-                     if (!assetConfig) {
-                        console.warn(`Optimal ReserveInfo Render: Config not found for investment name ${investment.name}`);
-                        return null; 
-                    }
-                    const reserveData = fetchedReserves.find(r => r.address === assetConfig.contractAddress);
-                    if (!reserveData) {
-                         // Simplified existing logic: If address match fails, don't render.
-                         console.warn(`Optimal ReserveInfo Render: Fetched data not found for ${assetConfig.name} (Address: ${assetConfig.contractAddress})`);
+                  } else { // assetConfig.type === 'reserve'
+                    const reserveData = fetchedReserves.find(r =>
+                        r.source === assetConfig.source &&
+                        r.name === assetConfig.apiName
+                    );
+                     if (!reserveData) {
+                         console.warn(`Optimal ReserveInfo Render: Fetched data not found for ${assetConfig.name} (Source: ${assetConfig.source}, apiName: ${assetConfig.apiName})`);
                          return null;
                     }
                      const displayTitle = assetConfig.name;

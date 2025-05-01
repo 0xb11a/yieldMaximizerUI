@@ -20,6 +20,7 @@ export interface Reserve {
   reserve_factor?: number; // Optional: Reserve factor (added)
   base_apy?: number; // Optional: Base APY returned by fetch-pool-data
   rewards_apy?: number; // Optional: Rewards APY returned by fetch-pool-data
+  source?: string; // Optional: Source of the reserve
 }
 
 /**
@@ -36,6 +37,7 @@ export interface Pool {
   base_apy?: number; // Optional: Base APY returned by fetch-pool-data
   rewards_apy?: number; // Optional: Rewards APY returned by fetch-pool-data
   token_price?: number; // Optional: Price of the LP token returned by fetch-pool-data
+  source?: string; // Optional: Source of the pool
 }
 
 /**
