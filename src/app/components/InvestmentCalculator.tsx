@@ -11,7 +11,7 @@ import {
   type Reserve,
   type Investment
 } from '@/config/apiConfig';
-import { SUPPORTED_ASSETS, type AssetConfig } from '@/config/assets';
+import { SUPPORTED_ASSETS } from '@/config/assets';
 import { WalletBalance } from '@/types'; 
 import { getInvestmentColor } from '@/styles/colors';
 import { formatUnits } from 'viem'; 
@@ -337,7 +337,7 @@ export default function InvestmentCalculator({ supplyFunds = 0, walletBalances =
 
         // Match using source and apiName from config against fetched reserve data
         // IMPORTANT: Assumes 'source' field exists in the Reserve type (needs adding to apiConfig.ts)
-        let reserve = adjustedReserves.find(r =>
+        const reserve = adjustedReserves.find(r =>
              r.source === assetConfig.source &&
              r.name === assetConfig.apiName
         );
