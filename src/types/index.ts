@@ -23,7 +23,7 @@ export interface BalanceDisplayItem {
   address: Address; // Address of the token whose balance is shown OR underlying token for MM pool
   
   // Value should now consistently be bigint or undefined/null
-  value: bigint | undefined | null; 
+  value: number | undefined; 
 
   isLoading: boolean;
   isError: boolean;

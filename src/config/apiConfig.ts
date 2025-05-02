@@ -104,6 +104,7 @@ export interface Investment {
   base_apr?: number;      // Added: Mapped from base_apr
   rewards_apr?: number;   // Added: Mapped from rewards_apr
   type: 'pool' | 'reserve';
+  percentage?: number; 
 }
 
 // Added interfaces for /fetch-pool-data endpoint
@@ -143,12 +144,11 @@ export async function fetchPoolAndReserveData(walletAddress: string): Promise<Fe
     const responseText = await response.text(); // Get text first for logging
 
     if (!response.ok) {
-      const errorText = await response.text().catch(() => 'No error details available');
       logger.error('API Response Error (fetch-pool-data)', {
          url: apiUrl,
         status: response.status,
         statusText: response.statusText,
-         errorBody: errorText
+         errorBody: responseText
       });
       throw new Error(`API error fetching pool/reserve data: ${response.status} ${response.statusText}`);
     }
@@ -167,12 +167,18 @@ export async function fetchPoolAndReserveData(walletAddress: string): Promise<Fe
     // Example: Map contractAddress back if API doesn't return it consistently 
     // (Adjust this part based on what's actually needed)
     data.pools = data.pools.map(pool => {
-       const config = SUPPORTED_ASSETS.find(a => a.name.includes(pool.name) && a.apiType === 'pool'); // Example: Less precise name match
-       return { ...pool, address: config?.contractAddress }; 
+       const config = SUPPORTED_ASSETS.find(a => 
+         (pool.address && a.contractAddress.toLowerCase() === pool.address.toLowerCase() && a.apiType === 'pool') || 
+         (a.name.includes(pool.name) && a.apiType === 'pool') 
+       );
+       return { ...pool, address: pool.address ?? config?.contractAddress };
     });
     data.reserves = data.reserves.map(reserve => {
-       const config = SUPPORTED_ASSETS.find(a => a.underlyingTokens[0]?.symbol === reserve.name && a.apiType === 'reserve');
-       return { ...reserve, address: config?.contractAddress }; 
+       const config = SUPPORTED_ASSETS.find(a => 
+         (reserve.address && a.contractAddress.toLowerCase() === reserve.address.toLowerCase() && a.apiType === 'reserve') ||
+         (a.apiType === 'reserve' && a.underlyingTokens[0]?.symbol === reserve.name)
+       );
+       return { ...reserve, address: reserve.address ?? config?.contractAddress };
     });
     // --- End Optional Mapping --- 
 
@@ -240,12 +246,11 @@ export async function fetchOptimalAllocation(
     const responseText = await response.text(); // Get text first
 
     if (!response.ok) {
-      const errorText = await response.text().catch(() => 'No error details available');
       logger.error('API Response Error (calculate-optimal-allocation)', {
          url: allocationApiUrl,
         status: response.status,
         statusText: response.statusText,
-         errorBody: errorText
+         errorBody: responseText
       });
       throw new Error(`API error calculating optimal allocation: ${response.status} ${response.statusText}`);
     }
@@ -271,8 +276,7 @@ export async function fetchOptimalAllocation(
             base_apr: item.base_apr,         
             rewards_apr: item.rewards_apr,   
             type: item.type,
-            // Handle null percentage after sanitization
-            percentage: item.percentage === null ? 0 : item.percentage // Set percentage to 0 if it was Infinity
+            percentage: item.percentage === null ? 0 : item.percentage 
           })),
           total_profit: data.total_profit,
           // Use sanitized totalFunds if needed, or ensure it's not 0 before division
@@ -294,5 +298,97 @@ export async function fetchOptimalAllocation(
       throw new Error(`Failed to fetch optimal allocation: ${error.message}`);
     }
     throw new Error('Failed to fetch optimal allocation');
+  }
+}
+
+/**
+ * Represents a single token/position returned by the portfolio API
+ */
+export interface PortfolioToken {
+  id: string; // Token address or native identifier (e.g., 'mnt')
+  name: string;
+  symbol: string;
+  decimals: number;
+  amount: number; // Raw token amount
+  amountUsd: number; // Value in USD
+  priceUsd: number;
+  chain: string; // e.g., 'mnt'
+  logoUrl: string;
+  protocol?: string; // e.g., 'INIT Capital', 'lendle.xyz', 'Merchant Moe'
+  type?: 'Supply' | string; // e.g., 'Supply' for positions
+  group?: 'Lending' | 'Liquidity Pool' | string; // e.g., 'Lending', 'Liquidity Pool'
+  poolId?: string; // Identifier for the specific pool/reserve within the protocol
+}
+
+/**
+ * Represents the main response structure of the portfolio API
+ */
+export interface PortfolioApiResponse {
+  address: Address;
+  type: string | null; // Can be 'EOA' or null
+  protocol: string; // e.g., 'EVM'
+  lastSyncAt: string | null;
+  tokens: PortfolioToken[];
+  total: number; // Total portfolio value in USD
+}
+
+/**
+ * Fetches portfolio data from the public API
+ * @param walletAddress The user's wallet address
+ * @param chainId The chain ID (e.g., 5000 for Mantle)
+ * @returns The parsed portfolio data
+ */
+export async function fetchPortfolioData(walletAddress: Address, chainId: number): Promise<PortfolioApiResponse> {
+  // Use a base URL from environment variables if available, otherwise fallback
+  const baseApiUrl = process.env.NEXT_PUBLIC_PORTFOLIO_API_URL || 'https://api.b11a.xyz/api/v1/public';
+  const apiUrl = `${baseApiUrl}/portfolio/${walletAddress}/yield?chainId=${chainId}`;
+
+  logger.info('Fetching portfolio data', { url: apiUrl });
+
+  try {
+    const response = await fetch(apiUrl, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+
+    const responseText = await response.text(); // Get text first for logging
+
+    if (!response.ok) {
+      logger.error('API Response Error (fetchPortfolioData)', {
+        url: apiUrl,
+        status: response.status,
+        statusText: response.statusText,
+        errorBody: responseText
+      });
+      // Provide a more user-friendly error based on status
+      if (response.status === 404) {
+         throw new Error(`Portfolio data not found for address ${walletAddress} on chain ${chainId}.`);
+      } else if (response.status >= 500) {
+         throw new Error(`Server error (${response.status}) when fetching portfolio data. Please try again later.`);
+      } else {
+         throw new Error(`API error fetching portfolio data: ${response.status} ${response.statusText}`);
+      }
+    }
+
+    let data: PortfolioApiResponse;
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseError) {
+      logger.error('Failed to parse JSON from /portfolio', { error: parseError, responseText });
+      throw new Error('Failed to parse server response from portfolio API.');
+    }
+
+    logger.info('Successfully fetched portfolio data', { address: walletAddress, tokenCount: data.tokens.length, totalValue: data.total });
+    return data;
+
+  } catch (error) {
+    logger.error('Fetch portfolio data error', { error });
+    // Re-throw specific error messages or a generic one
+    if (error instanceof Error) {
+      throw new Error(`Failed to fetch portfolio data: ${error.message}`);
+    }
+    throw new Error('An unknown error occurred while fetching portfolio data.');
   }
 } 
