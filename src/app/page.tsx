@@ -1,365 +1,326 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useBalance, useReadContract, UseBalanceReturnType, UseReadContractReturnType } from 'wagmi';
-import { isAddress, formatUnits, Address} from 'viem';
-import { AssetConfig, getAssetsForBalanceDisplay, SUPPORTED_ASSETS, MANTLE_USDC} from '@/config/assets';
-import { useInitCapitalBalance } from '@/hooks/mantleCustom/useInitCapitalBalance';
-import { useMMPoolBalance } from '@/hooks/mantleCustom/useMMPoolBalance';
+import { isAddress, formatUnits, Address, parseUnits } from 'viem';
+import { AssetConfig, SUPPORTED_ASSETS, MANTLE_USDC } from '@/config/assets';
 import { getInvestmentColor } from '@/styles/colors';
 import { BalanceDisplayItem, WalletBalance } from '@/types';
+import { fetchPortfolioData, PortfolioApiResponse, PortfolioToken } from '@/config/apiConfig';
+import logger from '@/utils/logger';
 
 import Header from './components/Header';
 import InvestmentCalculator from '@/app/components/InvestmentCalculator';
 import WalletBalanceDisplay from '@/app/components/WalletBalanceDisplay';
 
-// Define a type for the results stored in state, matching relevant fields from BalanceDisplayItem
-interface BalanceStateResult {
-  value: bigint | undefined | null; // Matches BalanceDisplayItem['value'] now
-  isLoading: boolean;
-  isError: boolean;
-}
-
-// --- Internal component to fetch balance for a single asset's display token ---
-interface AssetBalanceFetcherProps {
-  assetId: string; // Use ID to link results back
-  walletAddress: Address | undefined;
-  balanceConfig: AssetConfig['balanceDisplayConfig']; // Pass only the relevant config part
-  onBalanceUpdate: (assetId: string, result: BalanceStateResult) => void;
-}
-
-function AssetBalanceFetcher({ assetId, walletAddress, balanceConfig, onBalanceUpdate }: AssetBalanceFetcherProps) {
-  // Determine if this fetcher is for the special InitCapital case
-  const isInitCapital = assetId === 'initcapital-usdc';
-
-  // Determine if the standard hooks should be active 
-  const isStandardHookActive = !!walletAddress && !isInitCapital;
-  const isInitCapitalHookActive = !!walletAddress && isInitCapital; 
-
-  // --- Hooks called UNCONDITIONALLY (but enabled conditionally) --- 
-
-  // Custom Hook for InitCapital (Always called, but now takes walletAddress)
-  const { 
-      balance: initCapitalBalance, 
-      isLoading: initCapitalLoading, 
-      isError: initCapitalError 
-  } = useInitCapitalBalance(walletAddress); 
-
-  // useBalance Hook (Conditionally enabled)
-  const balanceResult: UseBalanceReturnType = useBalance({
-    address: walletAddress,
-    token: balanceConfig?.hook === 'useBalance' ? balanceConfig.tokenAddress : undefined,
-    query: {
-      enabled: isStandardHookActive && balanceConfig?.hook === 'useBalance',
-    },
-  });
-
-  // useReadContract Hook (Conditionally enabled)
-  const readContractResult: UseReadContractReturnType = useReadContract({
-    address: balanceConfig?.hook === 'useReadContract' ? balanceConfig.tokenAddress : undefined,
-    abi: balanceConfig?.hook === 'useReadContract' ? balanceConfig.args?.abi : undefined,
-    functionName: balanceConfig?.hook === 'useReadContract' ? balanceConfig.args?.functionName : undefined,
-    args: balanceConfig?.hook === 'useReadContract' && walletAddress ? [walletAddress] : undefined,
-    query: {
-      enabled: isStandardHookActive && balanceConfig?.hook === 'useReadContract',
-    },
-  });
-
-  // --- Separate Effects for Updating Parent --- 
-
-  // Effect for InitCapital
-  useEffect(() => {
-    if (isInitCapital && isInitCapitalHookActive) { 
-        const result: BalanceStateResult = {
-            value: initCapitalBalance,
-            isLoading: initCapitalLoading,
-            isError: initCapitalError,
-        };
-        onBalanceUpdate(assetId, result);
-    } else if (isInitCapital && !isInitCapitalHookActive) {
-        const result: BalanceStateResult = { value: undefined, isLoading: false, isError: false }; 
-        onBalanceUpdate(assetId, result);
-    }
-  }, [
-    isInitCapital, isInitCapitalHookActive, 
-    initCapitalBalance, initCapitalLoading, initCapitalError, 
-    assetId, onBalanceUpdate
-  ]); 
-
-  // Effect for Standard Hooks (useBalance / useReadContract)
-  useEffect(() => {
-    if (!isInitCapital && balanceConfig) {
-        let result: BalanceStateResult;
-        if (balanceConfig.hook === 'useBalance') {
-            result = {
-                value: balanceResult.data?.value,
-                isLoading: balanceResult.isLoading,
-                isError: balanceResult.isError,
-            };
-        } else if (balanceConfig.hook === 'useReadContract') {
-            result = {
-                value: readContractResult.data as bigint | undefined,
-                isLoading: readContractResult.isLoading,
-                isError: readContractResult.isError,
-            };
-        } else {
-            // Fallback if hook type is somehow wrong (shouldn't happen)
-            result = { value: undefined, isLoading: false, isError: true };
-        }
-        onBalanceUpdate(assetId, result);
-    }
-  // Depend on standard hook results, config, callback
-  }, [
-    isInitCapital, 
-    balanceConfig, 
-    balanceResult.data, balanceResult.isLoading, balanceResult.isError, 
-    readContractResult.data, readContractResult.isLoading, readContractResult.isError, 
-    assetId, onBalanceUpdate
-  ]);
-
-  // This component doesn't render anything itself
-  return null;
-}
-// --- End Internal Component ---
+// Define Mantle Chain ID
+const MANTLE_CHAIN_ID = 5000;
 
 export default function Home() {
-  // --- State Management --- 
+  // --- State Management ---
   const [manualAddress, setManualAddress] = useState<string>('');
   const [displayAddress, setDisplayAddress] = useState<Address | undefined>(undefined);
   const [isManualAddressValid, setIsManualAddressValid] = useState<boolean>(true);
   const [totalSupplyValue, setTotalSupplyValue] = useState<number>(0);
-  const [balanceResults, setBalanceResults] = useState<Record<string, BalanceStateResult>>({});
+
+  // --- NEW State for Portfolio API ---
+  const [portfolioData, setPortfolioData] = useState<PortfolioApiResponse | null>(null);
+  const [portfolioLoading, setPortfolioLoading] = useState<boolean>(false);
+  const [portfolioError, setPortfolioError] = useState<string | null>(null);
   // ---
 
-  // Get assets configured for standard balance display (excluding MM pool now)
-  const assetsToDisplayStandard = useMemo(() => 
-    getAssetsForBalanceDisplay().filter(asset => asset.id !== 'merchantmoe-usdc-usdt'), 
-  []);
-
-  // Find the Merchant Moe asset config
-  const merchantMoeAsset = useMemo(() => 
-    SUPPORTED_ASSETS.find(asset => asset.id === 'merchantmoe-usdc-usdt'), 
-  []);
-
-  // Callback for AssetBalanceFetcher - MEMOIZED
-  const handleBalanceUpdate = useCallback((assetId: string, result: BalanceStateResult) => {
-    setBalanceResults(prev => {
-      // Type checking is now consistent
-      if (prev[assetId]?.value === result.value && 
-          prev[assetId]?.isLoading === result.isLoading &&
-          prev[assetId]?.isError === result.isError) {
-        return prev;
-      }
-      return { ...prev, [assetId]: result };
-    });
-  }, []); // Empty dependency array because it only uses setBalanceResults
-
-  // --- Hook for Merchant Moe Pool Balance ---
-  const mmTokenX = merchantMoeAsset?.underlyingTokens?.[0];
-  const mmTokenY = merchantMoeAsset?.underlyingTokens?.[1];
-  
-  const { 
-    usdcBalanceRaw: mmUsdcBalanceBigInt, // Hook now returns bigint | null
-    isLoading: mmIsLoading,
-    error: mmError,
-    refetch: refetchMmBalance 
-  } = useMMPoolBalance(
-    merchantMoeAsset?.contractAddress,
-    mmTokenX, 
-    mmTokenY, 
-    displayAddress,
-    80
-  );
-
-  // Effect to merge Merchant Moe balance results into the main state
+  // --- Effect to Fetch Portfolio Data ---
   useEffect(() => {
-    if (merchantMoeAsset) {
-      // Directly use the bigint value from the hook
-      const result: BalanceStateResult = {
-        value: mmUsdcBalanceBigInt, // Use the bigint | null value directly
-        isLoading: mmIsLoading,
-        isError: !!mmError,
-      };
-      handleBalanceUpdate(merchantMoeAsset.id, result);
+    // Flag to prevent state updates if component unmounts during fetch
+    let isCancelled = false;
+
+    const loadPortfolio = async () => {
+      if (!displayAddress || !isAddress(displayAddress)) {
+        setPortfolioData(null);
+        setPortfolioLoading(false);
+        setPortfolioError(null);
+        return;
+      }
+
+      setPortfolioLoading(true);
+      setPortfolioError(null);
+      setPortfolioData(null); // Clear previous data
+
+      try {
+        logger.info(`Fetching portfolio for address: ${displayAddress}`);
+        const data = await fetchPortfolioData(displayAddress, MANTLE_CHAIN_ID);
+        if (!isCancelled) {
+          setPortfolioData(data);
+          logger.info(`Successfully fetched portfolio for: ${displayAddress}`, data);
+        }
+      } catch (err) {
+        logger.error(`Error fetching portfolio for ${displayAddress}:`, err);
+        if (!isCancelled) {
+          const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
+          setPortfolioError(errorMessage);
+        }
+      } finally {
+        if (!isCancelled) {
+          setPortfolioLoading(false);
+        }
+      }
+    };
+
+    loadPortfolio();
+
+    // Cleanup function
+    return () => {
+      isCancelled = true;
+      logger.info(`Cancelling portfolio fetch for: ${displayAddress}`);
+    };
+  }, [displayAddress]); // Re-run only when displayAddress changes
+
+  // --- Calculate Total Supply Effect (using API data) ---
+  useEffect(() => {
+    if (portfolioLoading) {
+      setTotalSupplyValue(0); // Don't show stale total while loading
+      return;
     }
-  }, [merchantMoeAsset, mmUsdcBalanceBigInt, mmIsLoading, mmError, handleBalanceUpdate]);
-
-  // --- Derive Loading/Error Status (Include MM Pool Status) --- 
-  const balanceStatus = useMemo(() => {
-      // Assets with standard balance config + MM pool if it exists
-      const assetsToCheck = merchantMoeAsset 
-          ? [...assetsToDisplayStandard, merchantMoeAsset] 
-          : assetsToDisplayStandard;
-          
-      const allLoaded = assetsToCheck.every(asset => balanceResults[asset.id] && !balanceResults[asset.id].isLoading);
-      const anyError = assetsToCheck.some(asset => balanceResults[asset.id]?.isError);
-      return { allLoaded, anyError };
-  // Recalculate when results object reference changes or assets list changes
-  }, [assetsToDisplayStandard, merchantMoeAsset, balanceResults]); 
-
-  // --- Calculate Total Supply Effect ---
-  useEffect(() => {
-    const { allLoaded, anyError } = balanceStatus; 
-    if (displayAddress && allLoaded && !anyError) {
-      let totalUsdcEquivalentBigInt = BigInt(0);
-      let usdcDecimals = 6; 
-      const usdcConfig = SUPPORTED_ASSETS.find(a => a.id === 'wallet-usdc');
-      if (usdcConfig?.balanceDisplayConfig) {
-          usdcDecimals = usdcConfig.balanceDisplayConfig.tokenDecimals;
-      }
-      const allAssetsWithResults = merchantMoeAsset 
-          ? [...assetsToDisplayStandard, merchantMoeAsset] 
-          : assetsToDisplayStandard;
-      allAssetsWithResults.forEach(asset => {
-         const result = balanceResults[asset.id];
-         // Check if value is a valid bigint and greater than 0
-         if (result && typeof result.value === 'bigint' && !result.isError && result.value > BigInt(0)) {
-             // Simple 1:1 sum for now, including MM pool correctly
-             if (asset.id === 'wallet-usdc' || asset.id === 'lendle-usdc' || asset.id === 'initcapital-usdc' || asset.id === 'merchantmoe-usdc-usdt') {
-                totalUsdcEquivalentBigInt += result.value;
-             } 
-         } 
-      });
-      const formattedTotal = formatUnits(totalUsdcEquivalentBigInt, usdcDecimals); 
-      const newTotalSupply = parseFloat(formattedTotal);
-      setTotalSupplyValue(newTotalSupply); 
-      // --- Logging --- 
-      console.log('--- Balance Data Update (Aggregated) ---');
-      console.log('Address:', displayAddress);
-      allAssetsWithResults.forEach(asset => {
-          const result = balanceResults[asset.id];
-          let symbol = asset.balanceDisplayConfig?.tokenSymbol;
-          if (asset.id === 'merchantmoe-usdc-usdt') { symbol = 'USDC (MM Pool)'; } 
-          if (result && symbol) { 
-              console.log(`${asset.name} (${symbol}):`, result); 
-          }
-      });
-      console.log('Total Supply Calculated (USDC Equivalent Estimate):', newTotalSupply);
-      // --- End Logging --- 
-    } else if (!displayAddress) {
+    if (portfolioError || !portfolioData || !portfolioData.tokens) {
       setTotalSupplyValue(0);
-      // --- MODIFICATION START ---
-      // Only clear results if they are not already empty
-      if (Object.keys(balanceResults).length > 0) {
-         console.log("(Total Supply Effect) Clearing balanceResults because displayAddress is undefined/invalid.");
-         setBalanceResults({});
-      }
-      // --- MODIFICATION END ---
+      return;
     }
-    // Keep dependencies including balanceResults
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [displayAddress, assetsToDisplayStandard, merchantMoeAsset, balanceStatus.allLoaded, balanceStatus.anyError, balanceResults]); 
+
+    // Calculate total supply based ONLY on USDC tokens across all protocols/wallet
+    let totalUsdcValue = 0;
+    const usdcAddressLower = MANTLE_USDC.address.toLowerCase();
+
+    portfolioData.tokens.forEach(token => {
+      // Check if the token ID matches USDC address (case-insensitive)
+      if (token.id.toLowerCase() === usdcAddressLower) {
+        totalUsdcValue += token.amountUsd;
+      }
+    });
+
+    setTotalSupplyValue(totalUsdcValue);
+    logger.info(`Total USDC Supply Calculated: ${totalUsdcValue} from ${portfolioData.tokens.length} total tokens for ${portfolioData.address}`);
+
+  // Depend only on the fetched data and loading/error state
+  }, [portfolioData, portfolioLoading, portfolioError]);
   // ---
 
   // --- Event Handlers ---
   const handleManualAddressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newAddress = e.target.value;
     setManualAddress(newAddress);
-    const isValid = isAddress(newAddress); // Check validity immediately
+    const isValid = isAddress(newAddress);
     setIsManualAddressValid(isValid);
 
     if (isValid) {
       setDisplayAddress(newAddress as Address);
-      // Optionally trigger refetch for MM pool if needed, though hook should react to address change via useAccount
-       refetchMmBalance(); // Explicitly refetch MM balance on address change
+      // No need to manually refetch, useEffect handles it
     } else {
-        setDisplayAddress(undefined);
-        setBalanceResults({}); 
+      setDisplayAddress(undefined);
+      // Effect will clear portfolioData
     }
   };
 
-  // --- Prepare Props for Components --- 
+  // --- Prepare Props for Components (using API data) ---
+
   const balanceDisplayData: BalanceDisplayItem[] = useMemo(() => {
-    const allAssetsForDisplay = merchantMoeAsset 
-        ? [...assetsToDisplayStandard, merchantMoeAsset] 
-        : assetsToDisplayStandard;
+      if (!portfolioData || !portfolioData.tokens) {
+          // Return empty or placeholder based on loading state if desired
+          return [];
+      }
 
-    return allAssetsForDisplay
-      .map(asset => {
-        const result: BalanceStateResult = balanceResults[asset.id] || { value: undefined, isLoading: !displayAddress, isError: false }; 
-        const originalIndex = SUPPORTED_ASSETS.findIndex(a => a.id === asset.id);
-        const assetType = asset.apiType || 'reserve'; 
-        const color = getInvestmentColor(assetType, originalIndex);
+      const items: BalanceDisplayItem[] = [];
+      const processedPoolIds = new Set<string>(); // Track processed MM pools
 
-        // Merchant Moe Pool
-        if (asset.id === 'merchantmoe-usdc-usdt') {
-          return {
-            id: asset.id,
-            name: asset.name, 
-            symbol: MANTLE_USDC.symbol, 
-            decimals: MANTLE_USDC.decimals, 
-            address: MANTLE_USDC.address, 
-            value: result.value, // Pass bigint | null | undefined
-            isLoading: result.isLoading,
-            isError: result.isError,
-            color: color, 
-            underlyingTokens: asset.underlyingTokens,
-          };
-        } 
-        // Standard Assets
-        else if (asset.balanceDisplayConfig) {
-            const balanceConfig = asset.balanceDisplayConfig;
-            return {
-              id: asset.id,
-              name: asset.name, 
-              symbol: balanceConfig.tokenSymbol,
-              decimals: balanceConfig.tokenDecimals,
-              address: balanceConfig.tokenAddress, 
-              value: result.value, // Pass bigint | undefined
-              isLoading: result.isLoading,
-              isError: result.isError,
-              color: color, 
-              underlyingTokens: asset.underlyingTokens,
-            };
-        } 
-        else { return null; }
-      })
-      .filter(item => item !== null) as BalanceDisplayItem[]; 
+      // 1. Iterate through SUPPORTED_ASSETS to ensure order and inclusion
+      SUPPORTED_ASSETS.forEach((asset, index) => {
+          const assetType = asset.apiType || 'reserve';
+          const color = getInvestmentColor(assetType, index);
 
-  }, [assetsToDisplayStandard, merchantMoeAsset, balanceResults, displayAddress]);
+          // Special Handling for Merchant Moe Pool (Aggregate USDC + USDT)
+          if (asset.id === 'merchantmoe-usdc-usdt' && asset.apiPoolId && !processedPoolIds.has(asset.apiPoolId)) {
+              let poolUsdValue = 0;
+              let poolIsLoading = portfolioLoading; // Pool loading state mirrors overall fetch
+              let poolIsError = !!portfolioError;   // Pool error state mirrors overall fetch
 
-  // Prepare data for InvestmentCalculator
+              // Find *all* tokens belonging to this pool in the API response
+              const poolTokens = portfolioData.tokens.filter(token =>
+                  token.protocol?.toLowerCase() === asset.apiProtocolName?.toLowerCase() &&
+                  token.poolId?.toLowerCase() === asset.apiPoolId?.toLowerCase()
+              );
+
+              if (poolTokens.length > 0) {
+                  poolUsdValue = poolTokens.reduce((sum, token) => sum + token.amountUsd, 0);
+                  // If we found tokens, assume no error unless global error exists
+                  poolIsError = !!portfolioError;
+              } else if (!portfolioLoading && !portfolioError) {
+                  // If not loading, no error, but no tokens found, might indicate 0 balance
+                  poolUsdValue = 0;
+                  poolIsError = false;
+              }
+              
+              items.push({
+                  id: asset.id,
+                  name: asset.name,
+                  symbol: MANTLE_USDC.symbol, // Represent pool primarily as USDC value
+                  decimals: MANTLE_USDC.decimals, // Use USDC decimals for context
+                  address: asset.contractAddress, // Pool contract address
+                  value: poolUsdValue, // Use the *aggregated* USD value (number)
+                  isLoading: poolIsLoading,
+                  isError: poolIsError,
+                  color: color,
+                  underlyingTokens: asset.underlyingTokens, // Keep for context
+              });
+              processedPoolIds.add(asset.apiPoolId); // Mark this pool as processed
+          }
+          // Handling for Reserves and Wallet USDC
+          else if (asset.type === 'reserve') {
+              // Find the matching token in the API response
+              const matchedToken = portfolioData.tokens.find(token =>
+                  // Match Wallet USDC (no protocol/poolId)
+                  (asset.source === 'wallet' && token.id.toLowerCase() === asset.apiTokenId?.toLowerCase() && !token.protocol) ||
+                  // Match Protocol Reserves (match token, protocol, poolId)
+                  (asset.source !== 'wallet' &&
+                   token.id.toLowerCase() === asset.apiTokenId?.toLowerCase() &&
+                   token.protocol?.toLowerCase() === asset.apiProtocolName?.toLowerCase() &&
+                   token.poolId?.toLowerCase() === asset.apiPoolId?.toLowerCase())
+              );
+
+              items.push({
+                  id: asset.id,
+                  name: asset.name,
+                  symbol: asset.underlyingTokens[0]?.symbol || 'N/A', // Use underlying symbol
+                  decimals: asset.underlyingTokens[0]?.decimals || 0, // Use underlying decimals
+                  address: asset.underlyingTokens[0]?.address || asset.contractAddress, // Underlying address
+                  value: matchedToken?.amountUsd ?? 0, // Use amountUsd (number), default to 0
+                  isLoading: portfolioLoading, // Loading mirrors global fetch
+                  isError: !!portfolioError && !matchedToken, // Error if global error AND no match found
+                  color: color,
+                  underlyingTokens: asset.underlyingTokens,
+              });
+          }
+      });
+
+      logger.debug("Generated balanceDisplayData:", items);
+      return items;
+  // Recalculate when portfolio data or loading/error state changes
+  }, [portfolioData, portfolioLoading, portfolioError]);
+
+
+  // Prepare data for InvestmentCalculator (WalletBalance format)
   const validBalancesForCalc: WalletBalance[] = useMemo(() => {
-    return balanceDisplayData
-      .filter(bal => !bal.isLoading && !bal.isError && typeof bal.value === 'bigint' && bal.value > BigInt(0))
-      .map(bal => ({
-        address: bal.address, 
-        symbol: bal.symbol,
-        name: bal.name, 
-        decimals: bal.decimals,
-        value: bal.value as bigint // Already filtered for bigint
-      }));
-  }, [balanceDisplayData]);
+      if (!portfolioData || !portfolioData.tokens || portfolioLoading || portfolioError) {
+          return [];
+      }
+
+      const walletBalances: WalletBalance[] = [];
+      const processedPoolIds = new Set<string>(); // Track processed MM pools
+
+      // Map SUPPORTED_ASSETS to WalletBalance, converting amounts
+      SUPPORTED_ASSETS.forEach(asset => {
+          // Special Handling for Merchant Moe Pool (Combine USDC/USDT amounts into one entry)
+          if (asset.id === 'merchantmoe-usdc-usdt' && asset.apiPoolId && !processedPoolIds.has(asset.apiPoolId)) {
+              // Find *USDC* token for this pool in API response
+              const usdcToken = portfolioData.tokens.find(token =>
+                  token.id.toLowerCase() === MANTLE_USDC.address.toLowerCase() &&
+                  token.protocol?.toLowerCase() === asset.apiProtocolName?.toLowerCase() &&
+                  token.poolId?.toLowerCase() === asset.apiPoolId?.toLowerCase()
+              );
+              // Find *USDT* token for this pool in API response (assuming same protocol/poolId)
+              const mantleUsdtAddress = '0x201eba5cc46d216ce6dc03f6a759e8e766e956ae'; // Hardcode USDT address for now
+              const usdtToken = portfolioData.tokens.find(token =>
+                  token.id.toLowerCase() === mantleUsdtAddress && // Use hardcoded address
+                  token.protocol?.toLowerCase() === asset.apiProtocolName?.toLowerCase() &&
+                  token.poolId?.toLowerCase() === asset.apiPoolId?.toLowerCase()
+              );
+
+              let combinedValueBigInt = BigInt(0);
+              let poolName = asset.name; // Default name
+
+              if (usdcToken && usdcToken.amount > 0) {
+                  try {
+                     combinedValueBigInt += parseUnits(usdcToken.amount.toString(), usdcToken.decimals);
+                     poolName = asset.name; // Keep original name if USDC found
+                  } catch (e) {
+                      logger.warn(`Could not parse MM USDC amount: ${usdcToken.amount}`, e);
+                  }
+              }
+               // Add USDT amount converted to USDC decimals (assuming 1:1 price for simplicity in calc input)
+               if (usdtToken && usdtToken.amount > 0 && MANTLE_USDC.decimals === usdtToken.decimals) { // Only if decimals match
+                    try {
+                       combinedValueBigInt += parseUnits(usdtToken.amount.toString(), usdtToken.decimals);
+                    } catch (e) {
+                       logger.warn(`Could not parse MM USDT amount: ${usdtToken.amount}`, e);
+                   }
+               } else if (usdtToken && usdtToken.amount > 0) {
+                   logger.warn(`USDC (${MANTLE_USDC.decimals}) and USDT (${usdtToken.decimals}) decimals don't match for MM pool ${asset.apiPoolId}. USDT amount not included in calculation input.`);
+               }
+
+              if (combinedValueBigInt > BigInt(0)) {
+                  walletBalances.push({
+                      // Use the POOL's contract address as the identifier for calculation input
+                      address: asset.contractAddress,
+                      symbol: MANTLE_USDC.symbol, // Represent as USDC for calculation input
+                      name: poolName, // Use the AssetConfig name
+                      decimals: MANTLE_USDC.decimals, // Use USDC decimals
+                      value: combinedValueBigInt, // Sum of USDC(+USDT) amounts in bigint
+                  });
+              }
+              processedPoolIds.add(asset.apiPoolId); // Mark pool as processed
+          }
+          // Handling for Reserves and Wallet USDC
+          else if (asset.type === 'reserve') {
+              // Find the matching token in the API response
+              const matchedToken = portfolioData.tokens.find(token =>
+                  (asset.source === 'wallet' && token.id.toLowerCase() === asset.apiTokenId?.toLowerCase() && !token.protocol) ||
+                  (asset.source !== 'wallet' &&
+                   token.id.toLowerCase() === asset.apiTokenId?.toLowerCase() &&
+                   token.protocol?.toLowerCase() === asset.apiProtocolName?.toLowerCase() &&
+                   token.poolId?.toLowerCase() === asset.apiPoolId?.toLowerCase())
+              );
+
+              if (matchedToken && matchedToken.amount > 0 && asset.underlyingTokens[0]) {
+                  try {
+                      const valueBigInt = parseUnits(matchedToken.amount.toString(), matchedToken.decimals);
+                      if (valueBigInt > BigInt(0)) {
+                          walletBalances.push({
+                              // Use the underlying token's address for reserves/wallet
+                              address: asset.underlyingTokens[0].address,
+                              symbol: asset.underlyingTokens[0].symbol,
+                              name: asset.name, // Use the AssetConfig name
+                              decimals: asset.underlyingTokens[0].decimals,
+                              value: valueBigInt,
+                          });
+                      }
+                  } catch (e) {
+                      logger.warn(`Could not parse amount for ${asset.name}: ${matchedToken.amount}`, e);
+                  }
+              }
+          }
+      });
+
+      logger.debug("Generated validBalancesForCalc:", walletBalances);
+      return walletBalances;
+  // Recalculate when portfolio data or loading/error state changes
+  }, [portfolioData, portfolioLoading, portfolioError]);
   // ---
 
   return (
     <div className="min-h-screen bg-[#111827]">
-      {/* Render Fetcher components ONLY for assets with standard display config */}
-      {assetsToDisplayStandard 
-        .filter(asset => asset.balanceDisplayConfig) 
-        .map(asset => (
-          <AssetBalanceFetcher 
-            key={asset.id}
-            assetId={asset.id} 
-            walletAddress={displayAddress}
-            balanceConfig={asset.balanceDisplayConfig!} 
-            onBalanceUpdate={handleBalanceUpdate} 
-          />
-      ))}
-
-      <Header /> 
+      <Header />
       <main className="text-[#F9FAFB]">
         <div className="container mx-auto px-4 sm:px-8 py-12">
-          <WalletBalanceDisplay 
+          <WalletBalanceDisplay
             manualAddress={manualAddress}
             isManualAddressValid={isManualAddressValid}
             onManualAddressChange={handleManualAddressChange}
             displayAddress={displayAddress}
-            balanceDisplayData={balanceDisplayData} // Pass newly structured data
+            balanceDisplayData={balanceDisplayData} // Pass API-derived data
+            isLoading={portfolioLoading} // Pass overall loading state
+            isError={!!portfolioError} // Pass overall error state
+            error={portfolioError} // Pass error message
           />
-          <InvestmentCalculator 
-            supplyFunds={totalSupplyValue} 
-            walletBalances={validBalancesForCalc} // Pass newly structured data
+          <InvestmentCalculator
+            supplyFunds={totalSupplyValue} // Pass API-derived total supply
+            walletBalances={validBalancesForCalc} // Pass API-derived balances
           />
         </div>
       </main>
