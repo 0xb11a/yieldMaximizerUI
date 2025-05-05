@@ -176,7 +176,7 @@ export async function fetchPoolAndReserveData(walletAddress: string): Promise<Fe
     data.reserves = data.reserves.map(reserve => {
        const config = SUPPORTED_ASSETS.find(a => 
          (reserve.address && a.contractAddress.toLowerCase() === reserve.address.toLowerCase() && a.apiType === 'reserve') ||
-         (a.apiType === 'reserve' && a.underlyingTokens[0]?.symbol === reserve.name)
+         (a.apiType === 'reserve' && a.apiName === reserve.name)
        );
        return { ...reserve, address: reserve.address ?? config?.contractAddress };
     });
@@ -307,7 +307,6 @@ export async function fetchOptimalAllocation(
 export interface PortfolioToken {
   id: string; // Token address or native identifier (e.g., 'mnt')
   name: string;
-  symbol: string;
   decimals: number;
   amount: number; // Raw token amount
   amountUsd: number; // Value in USD

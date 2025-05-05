@@ -35,7 +35,6 @@ interface AllocationItem {
 
 interface CurrentYieldItem {
   name: string;
-  symbol: string;
   balance: number;
   color: string;
   type: 'pool' | 'reserve';
@@ -179,7 +178,6 @@ export default function InvestmentCalculator({ supplyFunds = 0, walletBalances =
                   console.warn(`No AssetConfig found for wallet balance: ${balance.name}`);
                   return {
                      name: balance.name,
-                     symbol: balance.symbol,
                      balance: parseFloat(formatUnits(balance.value, balance.decimals)),
                      color: '#808080', 
                      type: 'reserve', 
@@ -218,7 +216,6 @@ export default function InvestmentCalculator({ supplyFunds = 0, walletBalances =
 
              const itemData: Partial<CurrentYieldItem> = {
                  name: assetConfig.name,
-                 symbol: balance.symbol,
                  balance: parseFloat(formatUnits(balance.value, balance.decimals)),
                  color: '#8884d8',
                  type: assetConfig.type,
@@ -717,10 +714,10 @@ export default function InvestmentCalculator({ supplyFunds = 0, walletBalances =
                 const formatCurrency = (value: number | undefined) => value !== undefined ? `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-';
 
                 return (
-                  <div key={`current-${item.symbol}-${item.name}`} className={`flex flex-col lg:flex-row lg:items-center transition-colors duration-150 text-sm py-2 border-b border-gray-800 lg:border-none last:border-b-0`}>
+                  <div key={`current-${item.name}`} className={`flex flex-col lg:flex-row lg:items-center transition-colors duration-150 text-sm py-2 border-b border-gray-800 lg:border-none last:border-b-0`}>
                     <div className="flex items-center gap-2 p-1 mb-1 lg:mb-0 lg:flex-[2]">
                       <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }}/>
-                      <span className="text-white font-medium break-words">{item.name} ({item.symbol})</span>
+                      <span className="text-white font-medium break-words">{item.name}</span>
                     </div>
                     {/* Mobile Data View */}
                     <div className="block lg:hidden pl-5 space-y-1 text-xs">

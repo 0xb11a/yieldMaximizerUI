@@ -8,7 +8,6 @@ export interface AssetData {
   isRebasing?: boolean
   name: string
   protocolId?: string
-  symbol: string
   // Ensure address is compatible with viem/wagmi Address type (`0x${string}`)
   // or the zero address '0x000...' for native currency.
   address: string 
@@ -18,7 +17,6 @@ export interface AssetData {
 export interface BalanceDisplayItem {
   id: string; 
   name: string; 
-  symbol: string; 
   decimals: number; 
   address: Address; // Address of the token whose balance is shown OR underlying token for MM pool
   
@@ -36,8 +34,7 @@ export interface BalanceDisplayItem {
 // Type for wallet balance data used in calculations
 export interface WalletBalance {
     address: Address; // Address of the token 
-    symbol: string;
-    name: string; 
+    name: string;
     decimals: number;
     value: bigint; 
 }

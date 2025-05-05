@@ -160,14 +160,13 @@ export default function Home() {
               items.push({
                   id: asset.id,
                   name: asset.name,
-                  symbol: MANTLE_USDC.symbol, // Represent pool primarily as USDC value
-                  decimals: MANTLE_USDC.decimals, // Use USDC decimals for context
-                  address: asset.contractAddress, // Pool contract address
-                  value: poolUsdValue, // Use the *aggregated* USD value (number)
+                  decimals: asset.decimals,
+                  address: asset.contractAddress,
+                  value: poolUsdValue,
                   isLoading: poolIsLoading,
                   isError: poolIsError,
                   color: color,
-                  underlyingTokens: asset.underlyingTokens, // Keep for context
+                  underlyingTokens: asset.underlyingTokens,
               });
               processedPoolIds.add(asset.apiPoolId); // Mark this pool as processed
           }
@@ -187,12 +186,11 @@ export default function Home() {
               items.push({
                   id: asset.id,
                   name: asset.name,
-                  symbol: asset.underlyingTokens[0]?.symbol || 'N/A', // Use underlying symbol
-                  decimals: asset.underlyingTokens[0]?.decimals || 0, // Use underlying decimals
-                  address: asset.underlyingTokens[0]?.address || asset.contractAddress, // Underlying address
-                  value: matchedToken?.amountUsd ?? 0, // Use amountUsd (number), default to 0
-                  isLoading: portfolioLoading, // Loading mirrors global fetch
-                  isError: !!portfolioError && !matchedToken, // Error if global error AND no match found
+                  decimals: asset.decimals,
+                  address: asset.underlyingTokens[0]?.address || asset.contractAddress,
+                  value: matchedToken?.amountUsd ?? 0,
+                  isLoading: portfolioLoading,
+                  isError: !!portfolioError && !matchedToken,
                   color: color,
                   underlyingTokens: asset.underlyingTokens,
               });
@@ -244,24 +242,22 @@ export default function Home() {
                   }
               }
                // Add USDT amount converted to USDC decimals (assuming 1:1 price for simplicity in calc input)
-               if (usdtToken && usdtToken.amount > 0 && MANTLE_USDC.decimals === usdtToken.decimals) { // Only if decimals match
+               if (usdtToken && usdtToken.amount > 0 && asset.decimals === usdtToken.decimals) {
                     try {
                        combinedValueBigInt += parseUnits(usdtToken.amount.toString(), usdtToken.decimals);
                     } catch (e) {
                        logger.warn(`Could not parse MM USDT amount: ${usdtToken.amount}`, e);
                    }
                } else if (usdtToken && usdtToken.amount > 0) {
-                   logger.warn(`USDC (${MANTLE_USDC.decimals}) and USDT (${usdtToken.decimals}) decimals don't match for MM pool ${asset.apiPoolId}. USDT amount not included in calculation input.`);
+                   logger.warn(`USDC (${asset.decimals}) and USDT (${usdtToken.decimals}) decimals don't match for MM pool ${asset.apiPoolId}. USDT amount not included in calculation input.`);
                }
 
               if (combinedValueBigInt > BigInt(0)) {
                   walletBalances.push({
-                      // Use the POOL's contract address as the identifier for calculation input
                       address: asset.contractAddress,
-                      symbol: MANTLE_USDC.symbol, // Represent as USDC for calculation input
-                      name: poolName, // Use the AssetConfig name
-                      decimals: MANTLE_USDC.decimals, // Use USDC decimals
-                      value: combinedValueBigInt, // Sum of USDC(+USDT) amounts in bigint
+                      name: poolName,
+                      decimals: asset.decimals,
+                      value: combinedValueBigInt,
                   });
               }
               processedPoolIds.add(asset.apiPoolId); // Mark pool as processed
@@ -282,11 +278,9 @@ export default function Home() {
                       const valueBigInt = parseUnits(matchedToken.amount.toString(), matchedToken.decimals);
                       if (valueBigInt > BigInt(0)) {
                           walletBalances.push({
-                              // Use the underlying token's address for reserves/wallet
-                              address: asset.underlyingTokens[0].address,
-                              symbol: asset.underlyingTokens[0].symbol,
-                              name: asset.name, // Use the AssetConfig name
-                              decimals: asset.underlyingTokens[0].decimals,
+                              address: asset.underlyingTokens[0]?.address || asset.contractAddress,
+                              name: asset.name,
+                              decimals: asset.decimals,
                               value: valueBigInt,
                           });
                       }
