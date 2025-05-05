@@ -135,12 +135,12 @@ export default function WalletBalanceDisplay({
                    const isFormatError = displayBalance === 'Error'; 
 
                    return (
-                      <div key={`${balInfo.symbol}-${balInfo.name}-${index}`} className={`flex flex-col lg:flex-row lg:items-center transition-colors duration-150 text-sm py-2 border-b border-gray-800 lg:border-b last:border-b-0`}>
+                      <div key={`${balInfo.name}-${index}`} className={`flex flex-col lg:flex-row lg:items-center transition-colors duration-150 text-sm py-2 border-b border-gray-800 lg:border-b last:border-b-0`}>
                         {/* Asset Name section */}
                         <div className="flex items-center gap-2 p-1 mb-1 lg:mb-0 lg:flex-[2]">
                            <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: balInfo.color }}/>
                            <span className="text-white font-medium break-words">
-                             {`${balInfo.name} (${balInfo.symbol})`}
+                             {`${balInfo.name}`}
                            </span>
                         </div>
 

@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import { isAddress, formatUnits, Address, parseUnits } from 'viem';
-import { AssetConfig, SUPPORTED_ASSETS, MANTLE_USDC } from '@/config/assets';
+import { useState, useEffect, useMemo } from 'react';
+import { isAddress, Address, parseUnits } from 'viem';
+import { SUPPORTED_ASSETS, MANTLE_USDC, MANTLE_CHAIN_ID, SONIC_CHAIN_ID, NetworkFilter } from '@/config/assets';
 import { getInvestmentColor } from '@/styles/colors';
 import { BalanceDisplayItem, WalletBalance } from '@/types';
 import { fetchPortfolioData, PortfolioApiResponse, PortfolioToken } from '@/config/apiConfig';
@@ -11,22 +11,21 @@ import logger from '@/utils/logger';
 import Header from './components/Header';
 import InvestmentCalculator from '@/app/components/InvestmentCalculator';
 import WalletBalanceDisplay from '@/app/components/WalletBalanceDisplay';
-
-// Define Mantle Chain ID
-const MANTLE_CHAIN_ID = 5000;
+import NetworkSelector from '@/app/components/NetworkSelector';
 
 export default function Home() {
   // --- State Management ---
   const [manualAddress, setManualAddress] = useState<string>('');
   const [displayAddress, setDisplayAddress] = useState<Address | undefined>(undefined);
   const [isManualAddressValid, setIsManualAddressValid] = useState<boolean>(true);
-  const [totalSupplyValue, setTotalSupplyValue] = useState<number>(0);
+
+  // --- NEW State for Network Selection ---
+  const [selectedNetwork, setSelectedNetwork] = useState<NetworkFilter>('all');
 
   // --- NEW State for Portfolio API ---
   const [portfolioData, setPortfolioData] = useState<PortfolioApiResponse | null>(null);
   const [portfolioLoading, setPortfolioLoading] = useState<boolean>(false);
   const [portfolioError, setPortfolioError] = useState<string | null>(null);
-  // ---
 
   // --- Effect to Fetch Portfolio Data ---
   useEffect(() => {
@@ -74,34 +73,14 @@ export default function Home() {
     };
   }, [displayAddress]); // Re-run only when displayAddress changes
 
-  // --- Calculate Total Supply Effect (using API data) ---
-  useEffect(() => {
-    if (portfolioLoading) {
-      setTotalSupplyValue(0); // Don't show stale total while loading
-      return;
+  // --- Filtering Logic based on selectedNetwork ---
+  const filteredAssets = useMemo(() => {
+    if (selectedNetwork === 'all') {
+      return SUPPORTED_ASSETS;
     }
-    if (portfolioError || !portfolioData || !portfolioData.tokens) {
-      setTotalSupplyValue(0);
-      return;
-    }
-
-    // Calculate total supply based ONLY on USDC tokens across all protocols/wallet
-    let totalUsdcValue = 0;
-    const usdcAddressLower = MANTLE_USDC.address.toLowerCase();
-
-    portfolioData.tokens.forEach(token => {
-      // Check if the token ID matches USDC address (case-insensitive)
-      if (token.id.toLowerCase() === usdcAddressLower) {
-        totalUsdcValue += token.amountUsd;
-      }
-    });
-
-    setTotalSupplyValue(totalUsdcValue);
-    logger.info(`Total USDC Supply Calculated: ${totalUsdcValue} from ${portfolioData.tokens.length} total tokens for ${portfolioData.address}`);
-
-  // Depend only on the fetched data and loading/error state
-  }, [portfolioData, portfolioLoading, portfolioError]);
-  // ---
+    const targetChainId = selectedNetwork === 'mantle' ? MANTLE_CHAIN_ID : SONIC_CHAIN_ID;
+    return SUPPORTED_ASSETS.filter(asset => asset.chainId === targetChainId);
+  }, [selectedNetwork]);
 
   // --- Event Handlers ---
   const handleManualAddressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -119,174 +98,215 @@ export default function Home() {
     }
   };
 
-  // --- Prepare Props for Components (using API data) ---
+  // --- Network Selection Handler ---
+  const handleNetworkChange = (network: NetworkFilter) => {
+    setSelectedNetwork(network);
+    // Note: No need to re-fetch portfolio data here, filtering happens client-side
+  };
+
+  // --- Prepare Props for Components (using API data and filteredAssets) ---
 
   const balanceDisplayData: BalanceDisplayItem[] = useMemo(() => {
       if (!portfolioData || !portfolioData.tokens) {
-          // Return empty or placeholder based on loading state if desired
           return [];
       }
 
       const items: BalanceDisplayItem[] = [];
-      const processedPoolIds = new Set<string>(); // Track processed MM pools
+      const processedPoolIds = new Set<string>(); // Track processed pools
 
-      // 1. Iterate through SUPPORTED_ASSETS to ensure order and inclusion
-      SUPPORTED_ASSETS.forEach((asset, index) => {
+      // 1. Iterate through FILTERED_ASSETS instead of SUPPORTED_ASSETS
+      filteredAssets.forEach((asset, index) => {
           const assetType = asset.apiType || 'reserve';
           const color = getInvestmentColor(assetType, index);
+          const assetChainId = asset.chainId;
+
+          // Find the chain of the token from portfolioData
+          const getChainFromPortfolioToken = (portfolioToken: PortfolioToken): string => {
+            // Simple mapping - adjust if API uses different identifiers
+            switch (portfolioToken.chain?.toLowerCase()) {
+                case 'mnt': return 'mantle';
+                case 'sonic': return 'sonic';
+                default: return 'unknown';
+            }
+          }
 
           // Special Handling for Merchant Moe Pool (Aggregate USDC + USDT)
-          if (asset.id === 'merchantmoe-usdc-usdt' && asset.apiPoolId && !processedPoolIds.has(asset.apiPoolId)) {
+          if (asset.id === 'merchantmoe-usdc-usdt' && asset.apiPoolId && !processedPoolIds.has(asset.apiPoolId) && assetChainId === MANTLE_CHAIN_ID) {
               let poolUsdValue = 0;
-              let poolIsLoading = portfolioLoading; // Pool loading state mirrors overall fetch
-              let poolIsError = !!portfolioError;   // Pool error state mirrors overall fetch
+              const poolIsLoading = portfolioLoading;
+              let poolIsError = !!portfolioError;
 
-              // Find *all* tokens belonging to this pool in the API response
               const poolTokens = portfolioData.tokens.filter(token =>
+                  getChainFromPortfolioToken(token) === 'mantle' && // Ensure token is on Mantle
                   token.protocol?.toLowerCase() === asset.apiProtocolName?.toLowerCase() &&
                   token.poolId?.toLowerCase() === asset.apiPoolId?.toLowerCase()
               );
 
               if (poolTokens.length > 0) {
                   poolUsdValue = poolTokens.reduce((sum, token) => sum + token.amountUsd, 0);
-                  // If we found tokens, assume no error unless global error exists
                   poolIsError = !!portfolioError;
               } else if (!portfolioLoading && !portfolioError) {
-                  // If not loading, no error, but no tokens found, might indicate 0 balance
                   poolUsdValue = 0;
                   poolIsError = false;
               }
-              
-              items.push({
-                  id: asset.id,
-                  name: asset.name,
-                  symbol: MANTLE_USDC.symbol, // Represent pool primarily as USDC value
-                  decimals: MANTLE_USDC.decimals, // Use USDC decimals for context
-                  address: asset.contractAddress, // Pool contract address
-                  value: poolUsdValue, // Use the *aggregated* USD value (number)
-                  isLoading: poolIsLoading,
-                  isError: poolIsError,
-                  color: color,
-                  underlyingTokens: asset.underlyingTokens, // Keep for context
-              });
-              processedPoolIds.add(asset.apiPoolId); // Mark this pool as processed
-          }
-          // Handling for Reserves and Wallet USDC
-          else if (asset.type === 'reserve') {
-              // Find the matching token in the API response
-              const matchedToken = portfolioData.tokens.find(token =>
-                  // Match Wallet USDC (no protocol/poolId)
-                  (asset.source === 'wallet' && token.id.toLowerCase() === asset.apiTokenId?.toLowerCase() && !token.protocol) ||
-                  // Match Protocol Reserves (match token, protocol, poolId)
-                  (asset.source !== 'wallet' &&
-                   token.id.toLowerCase() === asset.apiTokenId?.toLowerCase() &&
-                   token.protocol?.toLowerCase() === asset.apiProtocolName?.toLowerCase() &&
-                   token.poolId?.toLowerCase() === asset.apiPoolId?.toLowerCase())
-              );
 
               items.push({
                   id: asset.id,
                   name: asset.name,
-                  symbol: asset.underlyingTokens[0]?.symbol || 'N/A', // Use underlying symbol
-                  decimals: asset.underlyingTokens[0]?.decimals || 0, // Use underlying decimals
-                  address: asset.underlyingTokens[0]?.address || asset.contractAddress, // Underlying address
-                  value: matchedToken?.amountUsd ?? 0, // Use amountUsd (number), default to 0
-                  isLoading: portfolioLoading, // Loading mirrors global fetch
-                  isError: !!portfolioError && !matchedToken, // Error if global error AND no match found
+                  decimals: asset.decimals,
+                  address: asset.contractAddress,
+                  value: poolUsdValue,
+                  isLoading: poolIsLoading,
+                  isError: poolIsError,
+                  color: color,
+                  underlyingTokens: asset.underlyingTokens,
+              });
+              processedPoolIds.add(asset.apiPoolId);
+          }
+          // Handling for Reserves and Wallet balances (Mantle & Sonic)
+          else if (asset.type === 'reserve') {
+              const targetChain = assetChainId === MANTLE_CHAIN_ID ? 'mantle' : 'sonic';
+
+              const matchedToken = portfolioData.tokens.find(token => {
+                 const tokenChain = getChainFromPortfolioToken(token);
+                 if (tokenChain !== targetChain) return false; // Skip if token is not on the asset's chain
+
+                 // Match Wallet (no protocol/poolId, check chain)
+                 if (asset.source === 'wallet') {
+                    return token.id.toLowerCase() === asset.apiTokenId?.toLowerCase() && !token.protocol;
+                 }
+                 // Match Protocol Reserves (match token, protocol, poolId, check chain)
+                 else {
+                     return token.id.toLowerCase() === asset.apiTokenId?.toLowerCase() &&
+                            token.protocol?.toLowerCase() === asset.apiProtocolName?.toLowerCase() &&
+                            token.poolId?.toLowerCase() === asset.apiPoolId?.toLowerCase();
+                 }
+              });
+
+              items.push({
+                  id: asset.id,
+                  name: asset.name,
+                  decimals: asset.decimals,
+                  address: asset.underlyingTokens[0]?.address || asset.contractAddress,
+                  value: matchedToken?.amountUsd ?? 0,
+                  isLoading: portfolioLoading,
+                  isError: !!portfolioError && !matchedToken && selectedNetwork !== 'all', // Show error only if specific network selected and no token found
                   color: color,
                   underlyingTokens: asset.underlyingTokens,
               });
           }
       });
 
-      logger.debug("Generated balanceDisplayData:", items);
+      logger.debug(`Generated balanceDisplayData for ${selectedNetwork}:`, items);
       return items;
-  // Recalculate when portfolio data or loading/error state changes
-  }, [portfolioData, portfolioLoading, portfolioError]);
+  // Recalculate when portfolio data, loading/error state, OR filteredAssets changes
+  }, [portfolioData, portfolioLoading, portfolioError, filteredAssets, selectedNetwork]); // Added selectedNetwork dependency
 
+  // --- Calculate Total Supply Value (Derived from filtered balances) ---
+   const totalSupplyValue = useMemo(() => {
+       // Sum the USD values of all items currently displayed, defaulting to 0 if value is missing
+       return balanceDisplayData.reduce((sum, item) => sum + (item.value ?? 0), 0);
+   }, [balanceDisplayData]);
+  // ---
 
-  // Prepare data for InvestmentCalculator (WalletBalance format)
+  // Prepare data for InvestmentCalculator (WalletBalance format based on filtered assets)
   const validBalancesForCalc: WalletBalance[] = useMemo(() => {
       if (!portfolioData || !portfolioData.tokens || portfolioLoading || portfolioError) {
           return [];
       }
 
       const walletBalances: WalletBalance[] = [];
-      const processedPoolIds = new Set<string>(); // Track processed MM pools
+      const processedPoolIds = new Set<string>();
 
-      // Map SUPPORTED_ASSETS to WalletBalance, converting amounts
-      SUPPORTED_ASSETS.forEach(asset => {
-          // Special Handling for Merchant Moe Pool (Combine USDC/USDT amounts into one entry)
-          if (asset.id === 'merchantmoe-usdc-usdt' && asset.apiPoolId && !processedPoolIds.has(asset.apiPoolId)) {
-              // Find *USDC* token for this pool in API response
-              const usdcToken = portfolioData.tokens.find(token =>
-                  token.id.toLowerCase() === MANTLE_USDC.address.toLowerCase() &&
-                  token.protocol?.toLowerCase() === asset.apiProtocolName?.toLowerCase() &&
-                  token.poolId?.toLowerCase() === asset.apiPoolId?.toLowerCase()
-              );
-              // Find *USDT* token for this pool in API response (assuming same protocol/poolId)
-              const mantleUsdtAddress = '0x201eba5cc46d216ce6dc03f6a759e8e766e956ae'; // Hardcode USDT address for now
-              const usdtToken = portfolioData.tokens.find(token =>
-                  token.id.toLowerCase() === mantleUsdtAddress && // Use hardcoded address
-                  token.protocol?.toLowerCase() === asset.apiProtocolName?.toLowerCase() &&
-                  token.poolId?.toLowerCase() === asset.apiPoolId?.toLowerCase()
-              );
+       // Find the chain of the token from portfolioData
+       const getChainFromPortfolioToken = (portfolioToken: PortfolioToken): string => {
+        // Simple mapping - adjust if API uses different identifiers
+        switch (portfolioToken.chain?.toLowerCase()) {
+            case 'mnt': return 'mantle';
+            case 'sonic': return 'sonic';
+            default: return 'unknown';
+        }
+       }
+
+      // Map FILTERED_ASSETS to WalletBalance, converting amounts
+      filteredAssets.forEach(asset => {
+          const assetChainId = asset.chainId;
+          const targetChain = assetChainId === MANTLE_CHAIN_ID ? 'mantle' : 'sonic';
+
+          // Special Handling for Merchant Moe Pool
+          if (asset.id === 'merchantmoe-usdc-usdt' && asset.apiPoolId && !processedPoolIds.has(asset.apiPoolId) && assetChainId === MANTLE_CHAIN_ID) {
+               // Find *USDC* token for this pool in API response
+               const usdcToken = portfolioData.tokens.find(token =>
+                   getChainFromPortfolioToken(token) === targetChain &&
+                   token.id.toLowerCase() === MANTLE_USDC.address.toLowerCase() &&
+                   token.protocol?.toLowerCase() === asset.apiProtocolName?.toLowerCase() &&
+                   token.poolId?.toLowerCase() === asset.apiPoolId?.toLowerCase()
+               );
+                // Find *USDT* token for this pool in API response (assuming same protocol/poolId)
+               const mantleUsdtAddress = '0x201eba5cc46d216ce6dc03f6a759e8e766e956ae'; // Hardcode USDT address for now
+               const usdtToken = portfolioData.tokens.find(token =>
+                   getChainFromPortfolioToken(token) === targetChain &&
+                   token.id.toLowerCase() === mantleUsdtAddress && // Use hardcoded address
+                   token.protocol?.toLowerCase() === asset.apiProtocolName?.toLowerCase() &&
+                   token.poolId?.toLowerCase() === asset.apiPoolId?.toLowerCase()
+               );
 
               let combinedValueBigInt = BigInt(0);
-              let poolName = asset.name; // Default name
+              let poolName = asset.name;
 
               if (usdcToken && usdcToken.amount > 0) {
                   try {
                      combinedValueBigInt += parseUnits(usdcToken.amount.toString(), usdcToken.decimals);
-                     poolName = asset.name; // Keep original name if USDC found
+                     poolName = asset.name;
                   } catch (e) {
                       logger.warn(`Could not parse MM USDC amount: ${usdcToken.amount}`, e);
                   }
               }
-               // Add USDT amount converted to USDC decimals (assuming 1:1 price for simplicity in calc input)
-               if (usdtToken && usdtToken.amount > 0 && MANTLE_USDC.decimals === usdtToken.decimals) { // Only if decimals match
+               // Add USDT amount converted to USDC decimals
+               if (usdtToken && usdtToken.amount > 0 && asset.decimals === usdtToken.decimals) {
                     try {
                        combinedValueBigInt += parseUnits(usdtToken.amount.toString(), usdtToken.decimals);
                     } catch (e) {
                        logger.warn(`Could not parse MM USDT amount: ${usdtToken.amount}`, e);
                    }
                } else if (usdtToken && usdtToken.amount > 0) {
-                   logger.warn(`USDC (${MANTLE_USDC.decimals}) and USDT (${usdtToken.decimals}) decimals don't match for MM pool ${asset.apiPoolId}. USDT amount not included in calculation input.`);
+                   logger.warn(`USDC (${asset.decimals}) and USDT (${usdtToken.decimals}) decimals don't match for MM pool ${asset.apiPoolId}. USDT amount not included.`);
                }
 
               if (combinedValueBigInt > BigInt(0)) {
                   walletBalances.push({
-                      // Use the POOL's contract address as the identifier for calculation input
                       address: asset.contractAddress,
-                      symbol: MANTLE_USDC.symbol, // Represent as USDC for calculation input
-                      name: poolName, // Use the AssetConfig name
-                      decimals: MANTLE_USDC.decimals, // Use USDC decimals
-                      value: combinedValueBigInt, // Sum of USDC(+USDT) amounts in bigint
+                      name: poolName,
+                      decimals: asset.decimals,
+                      value: combinedValueBigInt,
                   });
               }
-              processedPoolIds.add(asset.apiPoolId); // Mark pool as processed
+              processedPoolIds.add(asset.apiPoolId);
           }
-          // Handling for Reserves and Wallet USDC
+          // Handling for Reserves and Wallet balances (Mantle & Sonic)
           else if (asset.type === 'reserve') {
-              // Find the matching token in the API response
-              const matchedToken = portfolioData.tokens.find(token =>
-                  (asset.source === 'wallet' && token.id.toLowerCase() === asset.apiTokenId?.toLowerCase() && !token.protocol) ||
-                  (asset.source !== 'wallet' &&
-                   token.id.toLowerCase() === asset.apiTokenId?.toLowerCase() &&
-                   token.protocol?.toLowerCase() === asset.apiProtocolName?.toLowerCase() &&
-                   token.poolId?.toLowerCase() === asset.apiPoolId?.toLowerCase())
-              );
+              const matchedToken = portfolioData.tokens.find(token => {
+                 const tokenChain = getChainFromPortfolioToken(token);
+                 if (tokenChain !== targetChain) return false;
+
+                 if (asset.source === 'wallet') {
+                    return token.id.toLowerCase() === asset.apiTokenId?.toLowerCase() && !token.protocol;
+                 }
+                 else {
+                     return token.id.toLowerCase() === asset.apiTokenId?.toLowerCase() &&
+                            token.protocol?.toLowerCase() === asset.apiProtocolName?.toLowerCase() &&
+                            token.poolId?.toLowerCase() === asset.apiPoolId?.toLowerCase();
+                 }
+              });
 
               if (matchedToken && matchedToken.amount > 0 && asset.underlyingTokens[0]) {
                   try {
                       const valueBigInt = parseUnits(matchedToken.amount.toString(), matchedToken.decimals);
                       if (valueBigInt > BigInt(0)) {
                           walletBalances.push({
-                              // Use the underlying token's address for reserves/wallet
-                              address: asset.underlyingTokens[0].address,
-                              symbol: asset.underlyingTokens[0].symbol,
-                              name: asset.name, // Use the AssetConfig name
-                              decimals: asset.underlyingTokens[0].decimals,
+                              address: asset.underlyingTokens[0]?.address || asset.contractAddress,
+                              name: asset.name,
+                              decimals: asset.decimals,
                               value: valueBigInt,
                           });
                       }
@@ -297,10 +317,10 @@ export default function Home() {
           }
       });
 
-      logger.debug("Generated validBalancesForCalc:", walletBalances);
+      logger.debug(`Generated validBalancesForCalc for ${selectedNetwork}:`, walletBalances);
       return walletBalances;
-  // Recalculate when portfolio data or loading/error state changes
-  }, [portfolioData, portfolioLoading, portfolioError]);
+  // Recalculate when portfolio data, loading/error state, OR filteredAssets changes
+  }, [portfolioData, portfolioLoading, portfolioError, filteredAssets, selectedNetwork]); // Added selectedNetwork dependency
   // ---
 
   return (
@@ -308,19 +328,27 @@ export default function Home() {
       <Header />
       <main className="text-[#F9FAFB]">
         <div className="container mx-auto px-4 sm:px-8 py-12">
+          <div className="mb-6 flex justify-center">
+            <NetworkSelector
+              selectedNetwork={selectedNetwork}
+              onNetworkChange={handleNetworkChange}
+            />
+          </div>
+
           <WalletBalanceDisplay
             manualAddress={manualAddress}
             isManualAddressValid={isManualAddressValid}
             onManualAddressChange={handleManualAddressChange}
             displayAddress={displayAddress}
-            balanceDisplayData={balanceDisplayData} // Pass API-derived data
-            isLoading={portfolioLoading} // Pass overall loading state
-            isError={!!portfolioError} // Pass overall error state
-            error={portfolioError} // Pass error message
+            balanceDisplayData={balanceDisplayData}
+            isLoading={portfolioLoading}
+            isError={!!portfolioError}
+            error={portfolioError}
           />
           <InvestmentCalculator
-            supplyFunds={totalSupplyValue} // Pass API-derived total supply
-            walletBalances={validBalancesForCalc} // Pass API-derived balances
+            supplyFunds={totalSupplyValue}
+            walletBalances={validBalancesForCalc}
+            networkFilter={selectedNetwork}
           />
         </div>
       </main>
