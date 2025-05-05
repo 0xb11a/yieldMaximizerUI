@@ -5,11 +5,16 @@ export interface TokenInfo {
   address: Address;
 }
 
+// Network Chain IDs
+export const MANTLE_CHAIN_ID = 5000;
+export const SONIC_CHAIN_ID = 146;
+
 // New Asset Configuration Structure
 export interface AssetConfig {
   id: string; // Unique ID for the config entry (e.g., 'lendle-usdc', 'pool-example-ab')
   name: string; // Display name (e.g., 'Lendle USDC', 'Example Pool A/B')
   type: 'pool' | 'reserve'; // Type of the asset (pool or reserve)
+  chainId: number; // Chain ID (e.g., 5000 for Mantle, 146 for Sonic)
   decimals: number; // Decimals of the primary underlying token
   source?: string; 
   logoUrl?: string;    
@@ -38,11 +43,14 @@ export const SONIC_USDCe: TokenInfo = {
 
 // --- Master Asset Configuration List ---
 export const SUPPORTED_ASSETS: AssetConfig[] = [
+  
+  // --- MANTLE ASSETS ---
   // --- Wallet USDC ---
   {
     id: 'wallet-usdc',
     name: 'Wallet USDC',
     type: 'reserve', // Conceptually a reserve
+    chainId: MANTLE_CHAIN_ID,
     source: 'wallet', // Keep internal source
     contractAddress: MANTLE_USDC.address,
     decimals: 6,
@@ -60,6 +68,7 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     id: 'lendle-usdc',
     name: 'Lendle USDC Reserve',
     type: 'reserve',
+    chainId: MANTLE_CHAIN_ID,
     source: 'Lendle Mantle', 
     contractAddress: MANTLE_USDC.address,
     decimals: 6,
@@ -80,6 +89,7 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     id: 'initcapital-usdc',
     name: 'InitCapital USDC Reserve',
     type: 'reserve',
+    chainId: MANTLE_CHAIN_ID,
     source: 'Init Mantle', // Keep internal source
     apiName: 'USDC Reserve', // For allocation API
     contractAddress: MANTLE_USDC.address,
@@ -97,6 +107,7 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     id: 'merchantmoe-usdc-usdt',
     name: 'Merchant Moe USDC-USDT Pool',
     type: 'pool',
+    chainId: MANTLE_CHAIN_ID,
     source: 'Merchant Moe Mantle', // Keep internal source
     contractAddress: '0x48c1a89af1102cad358549e9bb16ae5f96cddfec',
     decimals: 6,
@@ -111,11 +122,31 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     apiPoolId: '0x48c1a89af1102cad358549e9bb16ae5f96cddfec', // Pool ID from API example for USDC
   },
 
+  // --- SONIC ASSETS ---
+  // --- Wallet USDC.e ---
+  {
+    id: 'wallet-sonic-usdc',
+    name: 'Wallet USDC.e', // Name for Sonic Wallet USDC
+    type: 'reserve',
+    chainId: SONIC_CHAIN_ID,
+    source: 'wallet',
+    contractAddress: SONIC_USDCe.address,
+    decimals: 6,
+    underlyingTokens: [{ address: SONIC_USDCe.address }],
+    apiType: 'reserve',
+    logoUrl: undefined,
+    allocationKey: 'PLACEHOLDER_WALLET_SONIC_USDC_KEY',
+    apiTokenId: SONIC_USDCe.address.toLowerCase(),
+    apiProtocolName: undefined,
+    apiPoolId: undefined,
+  },
+
   // --- Aave Sonic USDC.e Reserve ---
   {
     id: 'aave-sonic-usdc',
     name: 'Aave USDC.e Reserve',
     type: 'reserve',
+    chainId: SONIC_CHAIN_ID,
     source: 'Aave Sonic',
     contractAddress: '0x29219dd400f2bf60e5a23d13be72b486d4038894', // Underlying token address (matches API request for Aave)
     decimals: 6, // Assumed USDC decimals
@@ -135,6 +166,7 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     id: 'euler-sonic-usdc',
     name: 'Euler USDC.e Reserve', // Display name
     type: 'reserve',
+    chainId: SONIC_CHAIN_ID,
     source: 'Euler Sonic',
     contractAddress: '0x196F3C7443E940911EE2Bb88e019Fd71400349D9', // Updated - Euler market/eToken address from API request
     decimals: 6, // Assumed USDC decimals
@@ -154,6 +186,7 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     id: 'silo-sonic-usdc',
     name: 'Silo USDC.e Reserve', // Display name
     type: 'reserve',
+    chainId: SONIC_CHAIN_ID,
     source: 'Silo Sonic',
     contractAddress: '0x322e1d5384aa4ED66AeCa770B95686271de61dc3', // Updated - Silo market/siloToken address from API request
     decimals: 6, // Assumed USDC decimals
@@ -170,14 +203,27 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
 ];
 
 
-export const getAssetsForApi = (): { type: 'pool' | 'reserve'; address: Address; source?: string }[] => {
+// Modified function to accept optional network filter
+export type NetworkFilter = 'all' | 'mantle' | 'sonic';
+
+export const getAssetsForApi = (networkFilter: NetworkFilter = 'all'): { type: 'pool' | 'reserve'; address: Address; source?: string }[] => {
   const uniqueFunds = new Map<string, { type: 'pool' | 'reserve'; address: Address; source?: string }>();
 
   SUPPORTED_ASSETS.forEach(asset => {
-    // Skip assets with source 'wallet' as they don't interact with allocation API
+    // Skip assets with source 'wallet'
     if (asset.source === 'wallet') {
       return;
     }
+
+    // Apply network filter
+    const assetChainId = asset.chainId;
+    if (networkFilter === 'mantle' && assetChainId !== MANTLE_CHAIN_ID) {
+        return;
+    }
+    if (networkFilter === 'sonic' && assetChainId !== SONIC_CHAIN_ID) {
+        return;
+    }
+    // 'all' includes everything (no return)
 
     const fund = {
       type: asset.apiType,
