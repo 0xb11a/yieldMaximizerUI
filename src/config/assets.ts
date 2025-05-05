@@ -12,21 +12,21 @@ export const SONIC_CHAIN_ID = 146;
 // New Asset Configuration Structure
 export interface AssetConfig {
   id: string; // Unique ID for the config entry (e.g., 'lendle-usdc', 'pool-example-ab')
-  name: string; // Display name (e.g., 'Lendle USDC', 'Example Pool A/B')
-  type: 'pool' | 'reserve'; // Type of the asset (pool or reserve)
-  chainId: number; // Chain ID (e.g., 5000 for Mantle, 146 for Sonic)
-  decimals: number; // Decimals of the primary underlying token
-  source?: string; 
-  logoUrl?: string;    
-  contractAddress: Address; // Address of the main pool or reserve contract (or underlying token if that's the API identifier)
-  underlyingTokens: TokenInfo[];  
-  explorerUrl?: string;  
-  apiType: 'pool' | 'reserve';
-  apiName?: string; // Optional: Name expected in the allocation API response if different from display 'name'
-  allocationKey: string; // Unique key from the /calculate-optimal-allocation API response 
-  apiTokenId?: string;      // Token `id` from portfolio API (usually the underlying token address)
-  apiProtocolName?: string; // `protocol` name from portfolio API (e.g., 'lendle.xyz')
-  apiPoolId?: string;       // `poolId` from portfolio API
+  name: string; // Display name shown in the UI (e.g., 'Lendle USDC', 'Example Pool A/B')
+  type: 'pool' | 'reserve'; // UI classification (e.g., for color coding)
+  chainId: number; // Network identifier (e.g., 5000 for Mantle, 146 for Sonic), used for filtering
+  decimals: number; // Decimals of the primary underlying token (used for formatting amounts)
+  source?: string; // Protocol/Source identifier string (e.g., 'Lendle Mantle', 'Aave Sonic'). Used to match against `Pool`/`Reserve` data from `/fetch-pool-data`.
+  logoUrl?: string; // Path to the asset's logo
+  contractAddress: Address; // Primary contract address. For reserves, this is often the *underlying token* address (like USDC). For pools, it's the pool's address. Used in `getAssetsForApi` for `/fetch-pool-data` request.
+  underlyingTokens: TokenInfo[]; // List of underlying tokens (primarily for info, sometimes used as fallback address)
+  explorerUrl?: string; // Link to block explorer for the asset or underlying token
+  apiType: 'pool' | 'reserve'; // Type expected/used by the backend API (`/fetch-pool-data` request)
+  apiName?: string; // Name expected/used by the backend API (in `/fetch-pool-data` response, matched against `Pool`/`Reserve` name field). Often specific, like 'USDC Reserve' or 'USDC-USDT'.
+  allocationKey: string; // Unique key used to match this asset config with the `name` field in the response details from `/calculate-optimal-allocation`.
+  apiTokenId?: string;      // Token address/identifier used to match against the `id` field in the `/portfolio` API response (usually the underlying token address).
+  apiProtocolName?: string; // Protocol name used to match against the `protocol` field in the `/portfolio` API response (e.g., 'lendle.xyz', 'Aave').
+  apiPoolId?: string;       // Pool/Market identifier used to match against the `poolId` field in the `/portfolio` API response.
 }
 
 

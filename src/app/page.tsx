@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import { isAddress, formatUnits, Address, parseUnits } from 'viem';
-import { AssetConfig, SUPPORTED_ASSETS, MANTLE_USDC, SONIC_USDCe, MANTLE_CHAIN_ID, SONIC_CHAIN_ID, NetworkFilter } from '@/config/assets';
+import { useState, useEffect, useMemo } from 'react';
+import { isAddress, Address, parseUnits } from 'viem';
+import { SUPPORTED_ASSETS, MANTLE_USDC, MANTLE_CHAIN_ID, SONIC_CHAIN_ID, NetworkFilter } from '@/config/assets';
 import { getInvestmentColor } from '@/styles/colors';
 import { BalanceDisplayItem, WalletBalance } from '@/types';
 import { fetchPortfolioData, PortfolioApiResponse, PortfolioToken } from '@/config/apiConfig';
@@ -133,7 +133,7 @@ export default function Home() {
           // Special Handling for Merchant Moe Pool (Aggregate USDC + USDT)
           if (asset.id === 'merchantmoe-usdc-usdt' && asset.apiPoolId && !processedPoolIds.has(asset.apiPoolId) && assetChainId === MANTLE_CHAIN_ID) {
               let poolUsdValue = 0;
-              let poolIsLoading = portfolioLoading;
+              const poolIsLoading = portfolioLoading;
               let poolIsError = !!portfolioError;
 
               const poolTokens = portfolioData.tokens.filter(token =>

@@ -136,6 +136,10 @@ export default function InvestmentCalculator({ supplyFunds = 0, walletBalances =
 
    // Calculate current yield when wallet balances or network filter change
    useEffect(() => {
+     if (displayMode === 'optimal') {
+         return;
+     }
+
      let isCancelled = false;
 
      const calculateCurrentYieldInternal = async () => {
@@ -144,9 +148,7 @@ export default function InvestmentCalculator({ supplyFunds = 0, walletBalances =
          // Clear previous state if balances are empty for the current filter
          setCurrentYield(INITIAL_CURRENT_YIELD);
          setCurrentTotalProfit(0);
-         // Don't set loading if there's nothing to calculate
-         // If displayMode was 'current', set it back to 'idle'
-         if (displayMode === 'current') setDisplayMode('idle');
+         setDisplayMode('idle');
          return;
        }
 
@@ -287,8 +289,8 @@ export default function InvestmentCalculator({ supplyFunds = 0, walletBalances =
      return () => {
        isCancelled = true;
      };
-   // Depend on walletBalances (which reflects parent's filter) and displayMode
-   }, [walletBalances, displayMode]); // networkFilter dependency removed as balances implicitly depend on it
+   // Depend on walletBalances and displayMode (to react when mode *changes* away from optimal)
+   }, [walletBalances, displayMode]); 
 
   const handleOptimalAllocation = async () => {
     if (supplyFunds <= 0) {
@@ -317,7 +319,7 @@ export default function InvestmentCalculator({ supplyFunds = 0, walletBalances =
     setError(null);
     setOptimalDistribution(null);
     setOptimalAllocation(INITIAL_ALLOCATION);
-    setDisplayMode('optimal'); // Set display mode immediately
+    setDisplayMode('optimal');
 
     const totalFundsForCalc: number = supplyFunds;
 
@@ -339,12 +341,7 @@ export default function InvestmentCalculator({ supplyFunds = 0, walletBalances =
             return config?.chainId === targetChainId;
           });
 
-      console.log(`Optimal Calc: Using data for network: ${networkFilter}`, { poolsToConsider, reservesToConsider });
-
       // --- Step 2: Simulate Withdrawal using FILTERED data --- 
-      console.log("Simulating withdrawal based on current holdings (already filtered by parent):", currentYield);
-
-      // Create copies of the FILTERED data
       const adjustedPools = JSON.parse(JSON.stringify(poolsToConsider)) as Pool[];
       const adjustedReserves = JSON.parse(JSON.stringify(reservesToConsider)) as Reserve[];
 
@@ -402,10 +399,7 @@ export default function InvestmentCalculator({ supplyFunds = 0, walletBalances =
         }
     });
 
-    console.log('Adjusted market data for selected network:', { pools: adjustedPools, reserves: adjustedReserves });
-
     // --- Step 3: Fetch Optimal Allocation using FILTERED & ADJUSTED data ---
-    console.log(`Fetching optimal allocation for network ${networkFilter} with adjusted data and total funds:`, totalFundsForCalc);
     const allocationData = await fetchOptimalAllocation(
         totalFundsForCalc,
         adjustedPools,    // Pass filtered & adjusted pools
@@ -413,9 +407,13 @@ export default function InvestmentCalculator({ supplyFunds = 0, walletBalances =
         1
     );
 
+    // console.log('[Optimal Alloc] Calculating optimal distribution for UI...');
     const newAllocation = calculateOptimalDistribution(allocationData);
 
+    // console.log('[Optimal Alloc] Setting optimalDistribution state...');
     setOptimalDistribution(allocationData);
+
+    // console.log('[Optimal Alloc] Setting optimalAllocation state...');
     setOptimalAllocation(newAllocation);
 
   } catch (err) {
@@ -428,7 +426,7 @@ export default function InvestmentCalculator({ supplyFunds = 0, walletBalances =
       }
     } 
     setError(errorMessage);
-    console.error('Optimal Allocation Process Error:', err);
+    console.error('[Optimal Alloc] CAUGHT ERROR:', err); // Keep error log
     setOptimalDistribution(null);
     setOptimalAllocation(INITIAL_ALLOCATION);
     setDisplayMode('idle');
