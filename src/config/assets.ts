@@ -164,7 +164,7 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
   },
 
   // --- Euler Sonic USDC.e Reserve ---
-  {
+  /*{
     id: 'euler-sonic-usdc',
     name: 'Euler USDC.e Reserve', // Display name
     type: 'reserve',
@@ -181,7 +181,7 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     apiTokenId: SONIC_USDCe.address.toLowerCase(), // Refers to underlying token
     apiProtocolName: 'Euler', // Updated from API response
     apiPoolId: '0x4860c903f6ad709c3eda46d3d502943f184d4315', // Updated - Matches API response for wallet 0xdd84...
-  },
+  },*/
 
   // --- Silo Sonic USDC.e Reserve ---
   {
@@ -190,17 +190,17 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     type: 'reserve',
     chainId: SONIC_CHAIN_ID,
     source: 'Silo Sonic',
-    contractAddress: '0x322e1d5384aa4ED66AeCa770B95686271de61dc3', // Updated - Silo market/siloToken address from API request
-    decimals: 6, // Assumed USDC decimals
-    underlyingTokens: [{ address: SONIC_USDCe.address }], // Underlying is still USDC.e
+    contractAddress: '0x322e1d5384aa4ED66AeCa770B95686271de61dc3',
+    decimals: 6, 
+    underlyingTokens: [{ address: SONIC_USDCe.address }], 
     apiType: 'reserve',
-    apiName: 'bUSDC.e-20 Reserve', // Updated from API response (base name)
-    logoUrl: '/svg/silo-logo.svg', // Placeholder - host locally
-    explorerUrl: `https://sonicscan.org/token/${SONIC_USDCe.address}`, // Link to underlying token
-    allocationKey: 'bUSDC.e-20 Reserve Silo Sonic', // Updated key based on apiName
-    apiTokenId: SONIC_USDCe.address.toLowerCase(), // Refers to underlying token
-    apiProtocolName: 'Silo', // Updated from API response - This already matches
-    apiPoolId: '0x062a36bbe0306c2fd7aecdf25843291fbab96ad2', // Matches API response
+    apiName: 'bUSDC.e-20 Reserve', 
+    logoUrl: '/svg/silo-logo.svg', 
+    explorerUrl: `https://sonicscan.org/token/${SONIC_USDCe.address}`,
+    allocationKey: 'bUSDC.e-20 Reserve Silo Sonic Silo Sonic', // Updated to match the API response name
+    apiTokenId: SONIC_USDCe.address.toLowerCase(), 
+    apiProtocolName: 'Silo', 
+    apiPoolId: '0x062a36bbe0306c2fd7aecdf25843291fbab96ad2',
   },
 ];
 
