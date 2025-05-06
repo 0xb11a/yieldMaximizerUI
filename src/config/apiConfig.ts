@@ -192,6 +192,14 @@ export async function fetchPoolAndReserveData(walletAddress: string): Promise<Fe
   }
 }
 
+// Helper function to format numbers to a max of 4 decimal places
+const formatNumberToMaxFourDecimals = (num: number | undefined | null): number => {
+  if (num === undefined || num === null || isNaN(num)) {
+    return 0; // Or handle as an error, or return undefined/null based on desired behavior
+  }
+  return parseFloat(num.toFixed(4));
+};
+
 /**
  * Generates the request body for the allocation API
  * @param reserves - Array of available lending reserves
@@ -206,13 +214,30 @@ export function generateAllocationRequestBody(
   pools: Pool[],
   minAllocationPercent?: number
 ): AllocationRequestBody {
+  // Helper to format all numeric values in an object
+  const formatObjectNumbers = (obj: any) => {
+    const newObj: any = {};
+    for (const key in obj) {
+      if (typeof obj[key] === 'number') {
+        newObj[key] = formatNumberToMaxFourDecimals(obj[key]);
+      } else {
+        newObj[key] = obj[key];
+      }
+    }
+    return newObj;
+  };
+
+  // Remove address field and format numbers before sending to API
+  const poolsFormatted = pools.map(({ address, ...rest }) => formatObjectNumbers(rest));
+  const reservesFormatted = reserves.map(({ address, ...rest }) => formatObjectNumbers(rest));
+
   const body: AllocationRequestBody = {
-    total_funds: totalFunds,
-    pools: pools,
-    reserves: reserves,
+    total_funds: formatNumberToMaxFourDecimals(totalFunds),
+    pools: poolsFormatted,     // Use formatted arrays
+    reserves: reservesFormatted, // Use formatted arrays
   };
   if (minAllocationPercent !== undefined) {
-    body.min_allocation_percent = minAllocationPercent;
+    body.min_allocation_percent = formatNumberToMaxFourDecimals(minAllocationPercent);
   }
   return body;
 }
@@ -268,15 +293,17 @@ export async function fetchOptimalAllocation(
           investments: data.details.map(item => ({
             name: item.name,
             allocation: item.allocated_amount,
-            expected_return: item.total_apy,
+            // Use APY values directly as percentages
+            expected_return: item.total_apy ?? 0, 
             expectedProfit: item.expected_profit,
-            reserve_apy: item.base_apy,
-            rewards_apy: item.rewards_apy,
-            total_apr: item.total_apr,
-            base_apr: item.base_apr,         
-            rewards_apr: item.rewards_apr,   
+            reserve_apy: item.base_apy ?? 0,   
+            rewards_apy: item.rewards_apy ?? 0, 
+            // Map APY to APR fields directly (assuming API doesn't provide separate APR)
+            total_apr: item.total_apy ?? 0,     
+            base_apr: item.base_apy ?? 0,      
+            rewards_apr: item.rewards_apy ?? 0, 
             type: item.type,
-            percentage: item.percentage === null ? 0 : item.percentage 
+            percentage: item.percentage === null ? 0 : item.percentage
           })),
           total_profit: data.total_profit,
           // Use sanitized totalFunds if needed, or ensure it's not 0 before division
