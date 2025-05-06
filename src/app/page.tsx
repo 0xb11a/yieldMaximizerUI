@@ -45,11 +45,21 @@ export default function Home() {
       setPortfolioData(null); // Clear previous data
 
       try {
-        logger.info(`Fetching portfolio for address: ${displayAddress}`);
-        const data = await fetchPortfolioData(displayAddress, MANTLE_CHAIN_ID);
-        if (!isCancelled) {
-          setPortfolioData(data);
-          logger.info(`Successfully fetched portfolio for: ${displayAddress}`, data);
+        if (selectedNetwork === 'all') {
+          logger.info(`Fetching portfolio for address: ${displayAddress} (all networks)`);
+          const data = await fetchPortfolioData(displayAddress); // No chainId for 'all'
+          if (!isCancelled) {
+            setPortfolioData(data);
+            logger.info(`Successfully fetched all-network portfolio for: ${displayAddress}`, data);
+          }
+        } else {
+          const chainIdToFetch = selectedNetwork === 'sonic' ? SONIC_CHAIN_ID : MANTLE_CHAIN_ID;
+          logger.info(`Fetching portfolio for address: ${displayAddress} on chainId: ${chainIdToFetch}`);
+          const data = await fetchPortfolioData(displayAddress, chainIdToFetch);
+          if (!isCancelled) {
+            setPortfolioData(data);
+            logger.info(`Successfully fetched portfolio for: ${displayAddress} on chainId: ${chainIdToFetch}`, data);
+          }
         }
       } catch (err) {
         logger.error(`Error fetching portfolio for ${displayAddress}:`, err);
@@ -71,7 +81,7 @@ export default function Home() {
       isCancelled = true;
       logger.info(`Cancelling portfolio fetch for: ${displayAddress}`);
     };
-  }, [displayAddress]); // Re-run only when displayAddress changes
+  }, [displayAddress, selectedNetwork]); // Re-run when displayAddress OR selectedNetwork changes
 
   // --- Filtering Logic based on selectedNetwork ---
   const filteredAssets = useMemo(() => {

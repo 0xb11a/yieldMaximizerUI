@@ -364,10 +364,14 @@ export interface PortfolioApiResponse {
  * @param chainId The chain ID (e.g., 5000 for Mantle)
  * @returns The parsed portfolio data
  */
-export async function fetchPortfolioData(walletAddress: Address, chainId: number): Promise<PortfolioApiResponse> {
+export async function fetchPortfolioData(walletAddress: Address, chainId?: number): Promise<PortfolioApiResponse> {
   // Use a base URL from environment variables if available, otherwise fallback
   const baseApiUrl = process.env.NEXT_PUBLIC_PORTFOLIO_API_URL || 'https://api.b11a.xyz/api/v1/public';
-  const apiUrl = `${baseApiUrl}/portfolio/${walletAddress}/yield?chainId=${chainId}`;
+  
+  let apiUrl = `${baseApiUrl}/portfolio/${walletAddress}/yield`;
+  if (chainId !== undefined) {
+    apiUrl += `?chainId=${chainId}`;
+  }
 
   logger.info('Fetching portfolio data', { url: apiUrl });
 
