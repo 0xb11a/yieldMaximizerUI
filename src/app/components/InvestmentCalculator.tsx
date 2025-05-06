@@ -81,49 +81,44 @@ export default function InvestmentCalculator({ supplyFunds = 0, walletBalances =
     const calculatedAllocation: AllocationItem[] = investments
       .filter(investment => investment.allocation > 0)
       .map((investment: Investment) => {
-        // Find the corresponding AssetConfig using the allocationKey
         const assetConfig = SUPPORTED_ASSETS.find(
           config => config.allocationKey === investment.name
         );
 
         if (!assetConfig) {
           console.warn(`Optimal Calc: AssetConfig not found for allocationKey: ${investment.name}`);
-          // Decide how to handle missing config: skip, use default, etc.
-          // For now, try using the investment name directly, but this might lack details
           return {
             name: investment.name,
             percentage: parseFloat(((investment.allocation / validTotalFunds) * 100).toFixed(2)),
-            color: getInvestmentColor(investment.type, -1), // Fallback color
+            color: getInvestmentColor(investment.type, -1),
             type: investment.type,
-            expected_return: investment.total_apr ?? 0, // Use total_apr (assuming APY calculation is done elsewhere or APR is sufficient)
+            expected_return: investment.expected_return ?? 0, // Total APY
             allocation: investment.allocation,
-            expectedProfit: investment.expectedProfit ?? 0, // Use expectedProfit
-            reserve_apy: investment.base_apr, // Use base_apr (assuming APY calc is elsewhere)
-            rewards_apy: investment.rewards_apy, // Use rewards_apy directly
-            total_apr: investment.total_apr, // Map total_apr
-            base_apr: investment.base_apr,     // Map base_apr
-            rewards_apr: investment.rewards_apr, // Map rewards_apr
+            expectedProfit: investment.expectedProfit ?? 0,
+            reserve_apy: investment.reserve_apy, // Base APY
+            rewards_apy: investment.rewards_apy, // Rewards APY
+            total_apr: investment.total_apr,     // Total APR
+            base_apr: investment.base_apr,       // Base APR
+            rewards_apr: investment.rewards_apr, // Rewards APR
           };
         }
 
-        // Determine the index within SUPPORTED_ASSETS for consistent coloring
         const supportedAssetIndex = SUPPORTED_ASSETS.findIndex(a => a.id === assetConfig.id);
-
-        const displayName = assetConfig.name; // Always use config name for display
+        const displayName = assetConfig.name;
 
         return {
             name: displayName,
             percentage: parseFloat(((investment.allocation / validTotalFunds) * 100).toFixed(2)),
             color: getInvestmentColor(assetConfig.type, supportedAssetIndex),
-            type: assetConfig.type, // Use type from config
-            expected_return: investment.total_apr ?? 0, // Use total_apr (assuming APY calc is elsewhere)
+            type: assetConfig.type,
+            expected_return: investment.expected_return ?? 0, // Total APY
             allocation: investment.allocation,
-            expectedProfit: investment.expectedProfit ?? 0, // Use expectedProfit
-            reserve_apy: investment.base_apr, // Use base_apr (assuming APY calc is elsewhere)
-            rewards_apy: investment.rewards_apy, // Use rewards_apy directly
-            total_apr: investment.total_apr, // Map total_apr
-            base_apr: investment.base_apr,     // Map base_apr
-            rewards_apr: investment.rewards_apr, // Map rewards_apr
+            expectedProfit: investment.expectedProfit ?? 0,
+            reserve_apy: investment.reserve_apy, // Base APY
+            rewards_apy: investment.rewards_apy, // Rewards APY
+            total_apr: investment.total_apr,     // Total APR
+            base_apr: investment.base_apr,       // Base APR
+            rewards_apr: investment.rewards_apr, // Rewards APR
         };
       });
 
@@ -440,6 +435,8 @@ export default function InvestmentCalculator({ supplyFunds = 0, walletBalances =
       const data = payload[0].payload as AllocationItem;
       const formatApy = (apy: number | undefined) => 
         apy !== undefined ? `${apy.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : 'N/A';
+      const formatApr = (apr: number | undefined) => 
+        apr !== undefined ? `${apr.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : 'N/A';
       const formatProfit = (profit: number | undefined) =>
         profit !== undefined ? `$${profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A';
 
@@ -450,11 +447,18 @@ export default function InvestmentCalculator({ supplyFunds = 0, walletBalances =
           <p>{`Percentage: ${data.percentage}%`}</p>
           <p>{`Expected Profit: ${formatProfit(data.expectedProfit)}`}</p>
           <p>{`Total APY: ${formatApy(data.expected_return)}`}</p>
-          {data.reserve_apy !== undefined && (
-            <p className="text-xs pl-2">{`└ Reserve APY: ${formatApy(data.reserve_apy)}`}</p>
+          {(data.reserve_apy !== undefined && data.reserve_apy !== 0) && (
+            <p className="text-xs pl-2">{`└ Base APY: ${formatApy(data.reserve_apy)}`}</p>
           )}
-          {data.rewards_apy !== undefined && (
+          {(data.rewards_apy !== undefined && data.rewards_apy !== 0) && (
             <p className="text-xs pl-2">{`└ Rewards APY: ${formatApy(data.rewards_apy)}`}</p>
+          )}
+          <p>{`Total APR: ${formatApr(data.total_apr)}`}</p>
+          {(data.base_apr !== undefined && data.base_apr !== 0) && (
+            <p className="text-xs pl-2">{`└ Base APR: ${formatApr(data.base_apr)}`}</p>
+          )}
+          {(data.rewards_apr !== undefined && data.rewards_apr !== 0) && (
+            <p className="text-xs pl-2">{`└ Rewards APR: ${formatApr(data.rewards_apr)}`}</p>
           )}
         </div>
       );
@@ -639,6 +643,7 @@ export default function InvestmentCalculator({ supplyFunds = 0, walletBalances =
                       {/* Mobile Data View */}
                       <div className="block lg:hidden pl-5 space-y-1 text-xs">
                         <div className="flex justify-between"><span className='text-[#9CA3AF]'>Allocation:</span><span className="text-white font-medium">{formatCurrency(item.allocation)}</span></div>
+                        <div className="flex justify-between"><span className='text-[#9CA3AF]'>Total APR:</span><span className="text-gray-400 font-medium">{formatPercent(item.total_apr)}</span></div>
                         <div className="flex justify-between"><span className='text-[#9CA3AF]'>Total APY:</span><span className="text-[#34D399] font-semibold">{formatPercent(item.expected_return)}</span></div>
                         <div className="flex justify-between"><span className='text-[#9CA3AF]'>Profit:</span><span className="text-white font-medium">{formatCurrency(item.expectedProfit)}</span></div>
                       </div>

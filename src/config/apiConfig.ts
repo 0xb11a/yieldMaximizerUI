@@ -169,16 +169,28 @@ export async function fetchPoolAndReserveData(walletAddress: string): Promise<Fe
     data.pools = data.pools.map(pool => {
        const config = SUPPORTED_ASSETS.find(a => 
          (pool.address && a.contractAddress.toLowerCase() === pool.address.toLowerCase() && a.apiType === 'pool') || 
-         (a.name.includes(pool.name) && a.apiType === 'pool') 
+         (a.apiType === 'pool' && a.name.includes(pool.name)) // pool.name from API vs a.name (display name) from config
        );
-       return { ...pool, address: pool.address ?? config?.contractAddress };
+       // If config is found, use its source and apiName, otherwise keep original pool data
+       return {
+         ...pool, 
+         address: pool.address ?? config?.contractAddress,
+         name: config?.apiName ?? pool.name, // Prefer config.apiName if available
+         source: config?.source ?? pool.source // Prefer config.source if available
+       };
     });
     data.reserves = data.reserves.map(reserve => {
        const config = SUPPORTED_ASSETS.find(a => 
          (reserve.address && a.contractAddress.toLowerCase() === reserve.address.toLowerCase() && a.apiType === 'reserve') ||
-         (a.apiType === 'reserve' && a.apiName === reserve.name)
+         (a.apiType === 'reserve' && a.apiName === reserve.name) // reserve.name from API vs a.apiName from config
        );
-       return { ...reserve, address: reserve.address ?? config?.contractAddress };
+       // If config is found, use its source and apiName, otherwise keep original reserve data
+       return {
+         ...reserve, 
+         address: reserve.address ?? config?.contractAddress,
+         name: config?.apiName ?? reserve.name, // Prefer config.apiName if available
+         source: config?.source ?? reserve.source // Prefer config.source if available
+       };
     });
     // --- End Optional Mapping --- 
 
@@ -306,10 +318,10 @@ export async function fetchOptimalAllocation(
             expectedProfit: item.expected_profit,
             reserve_apy: item.base_apy ?? 0,   
             rewards_apy: item.rewards_apy ?? 0, 
-            // Map APY to APR fields directly (assuming API doesn't provide separate APR)
-            total_apr: item.total_apy ?? 0,     
-            base_apr: item.base_apy ?? 0,      
-            rewards_apr: item.rewards_apy ?? 0, 
+            // Map APR fields from the API
+            total_apr: item.total_apr ?? 0,     
+            base_apr: item.base_apr ?? 0,      
+            rewards_apr: item.rewards_apr ?? 0, 
             type: item.type,
             percentage: item.percentage === null ? 0 : item.percentage
           })),
