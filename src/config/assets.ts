@@ -159,8 +159,8 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     explorerUrl: `https://sonicscan.org/token/0x29219dd400f2bf60e5a23d13be72b486d4038894`, // Link to underlying token
     allocationKey: 'USDC.e Reserve Aave Sonic', // Updated key based on apiName
     apiTokenId: '0x29219dd400f2bf60e5a23d13be72b486d4038894',
-    apiProtocolName: 'Aave', // Matches API response
-    apiPoolId: '0x29219dd400f2bf60e5a23d13be72b486d4038894', // Matches contractAddress used in API request
+    apiProtocolName: 'Aave V3', // Matches API response: from 'Aave' to 'Aave V3'
+    apiPoolId: '0x5362dbb1e601abf3a4c14c22ffeda64042e5eaa3', // Matches API response
   },
 
   // --- Euler Sonic USDC.e Reserve ---
@@ -180,7 +180,7 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     allocationKey: 'eUSDC.e-3 Reserve Euler Sonic', // Updated key based on apiName
     apiTokenId: SONIC_USDCe.address.toLowerCase(), // Refers to underlying token
     apiProtocolName: 'Euler', // Updated from API response
-    apiPoolId: '0x196f3c7443e940911ee2bb88e019fd71400349d9', // Updated - Matches contractAddress used in API request
+    apiPoolId: '0x4860c903f6ad709c3eda46d3d502943f184d4315', // Updated - Matches API response for wallet 0xdd84...
   },
 
   // --- Silo Sonic USDC.e Reserve ---
@@ -199,8 +199,8 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     explorerUrl: `https://sonicscan.org/token/${SONIC_USDCe.address}`, // Link to underlying token
     allocationKey: 'bUSDC.e-20 Reserve Silo Sonic', // Updated key based on apiName
     apiTokenId: SONIC_USDCe.address.toLowerCase(), // Refers to underlying token
-    apiProtocolName: 'Silo', // Updated from API response
-    apiPoolId: '0x322e1d5384aa4ed66aeca770b95686271de61dc3', // Updated - Matches contractAddress used in API request
+    apiProtocolName: 'Silo', // Updated from API response - This already matches
+    apiPoolId: '0x062a36bbe0306c2fd7aecdf25843291fbab96ad2', // Matches API response
   },
 ];
 
