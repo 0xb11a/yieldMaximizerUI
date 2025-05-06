@@ -180,10 +180,32 @@ export async function fetchPoolAndReserveData(walletAddress: string): Promise<Fe
        };
     });
     data.reserves = data.reserves.map(reserve => {
-       const config = SUPPORTED_ASSETS.find(a => 
-         (reserve.address && a.contractAddress.toLowerCase() === reserve.address.toLowerCase() && a.apiType === 'reserve') ||
-         (a.apiType === 'reserve' && a.apiName === reserve.name) // reserve.name from API vs a.apiName from config
-       );
+       // First pass: Try to find a specific match
+       let config = SUPPORTED_ASSETS.find(a => {
+         // Priority 1: Match by address if available in the reserve data and asset config
+         if (reserve.address && a.contractAddress &&
+             a.contractAddress.toLowerCase() === reserve.address.toLowerCase() &&
+             a.apiType === 'reserve') {
+           return true;
+         }
+         // Priority 2: Match by apiName AND source (especially if reserve.address is not available)
+         if (a.apiType === 'reserve' &&
+             a.apiName === reserve.name &&
+             a.source === reserve.source) {
+           return true;
+         }
+         return false;
+       });
+
+       // Fallback pass: If no specific config found by address or (name + source), 
+       // then try the original broader match by name only.
+       // This maintains previous behavior for cases not covered above but can be ambiguous.
+       if (!config) {
+         config = SUPPORTED_ASSETS.find(a =>
+            a.apiType === 'reserve' && a.apiName === reserve.name
+         );
+       }
+
        // If config is found, use its source and apiName, otherwise keep original reserve data
        return {
          ...reserve, 
