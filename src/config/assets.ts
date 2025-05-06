@@ -197,7 +197,7 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     apiName: 'bUSDC.e-20 Reserve', 
     logoUrl: '/svg/silo-logo.svg', 
     explorerUrl: `https://sonicscan.org/token/${SONIC_USDCe.address}`,
-    allocationKey: 'bUSDC.e-20 Reserve Silo Sonic Silo Sonic', // Updated to match the API response name
+    allocationKey: 'bUSDC.e-20 Reserve Silo Sonic', // Corrected to match API response name
     apiTokenId: SONIC_USDCe.address.toLowerCase(), 
     apiProtocolName: 'Silo', 
     apiPoolId: '0x062a36bbe0306c2fd7aecdf25843291fbab96ad2',
