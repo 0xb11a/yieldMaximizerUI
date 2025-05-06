@@ -215,21 +215,29 @@ export function generateAllocationRequestBody(
   minAllocationPercent?: number
 ): AllocationRequestBody {
   // Helper to format all numeric values in an object
-  const formatObjectNumbers = (obj: any) => {
-    const newObj: any = {};
+  const formatObjectNumbers = <T extends Record<string, unknown>>(obj: T): T => {
+    const newObj: Record<string, unknown> = {};
     for (const key in obj) {
       if (typeof obj[key] === 'number') {
-        newObj[key] = formatNumberToMaxFourDecimals(obj[key]);
+        newObj[key] = formatNumberToMaxFourDecimals(obj[key] as number);
       } else {
         newObj[key] = obj[key];
       }
     }
-    return newObj;
+    return newObj as T;
   };
 
   // Remove address field and format numbers before sending to API
-  const poolsFormatted = pools.map(({ address, ...rest }) => formatObjectNumbers(rest));
-  const reservesFormatted = reserves.map(({ address, ...rest }) => formatObjectNumbers(rest));
+  const poolsFormatted = pools.map((poolItem: Pool) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { address: _unusedAddress, ...rest } = poolItem;
+    return formatObjectNumbers(rest); 
+  });
+  const reservesFormatted = reserves.map((reserveItem: Reserve) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { address: _unusedAddress, ...rest } = reserveItem;
+    return formatObjectNumbers(rest);
+  });
 
   const body: AllocationRequestBody = {
     total_funds: formatNumberToMaxFourDecimals(totalFunds),

@@ -180,7 +180,7 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     allocationKey: 'eUSDC.e-3 Reserve Euler Sonic', // Updated key based on apiName
     apiTokenId: SONIC_USDCe.address.toLowerCase(), // Refers to underlying token
     apiProtocolName: 'Euler', // Updated from API response
-    apiPoolId: '0x196f3c7443e940911ee2bb88e019fd71400349d9', // Updated - Matches contractAddress used in API request
+    apiPoolId: '0x4860c903f6ad709c3eda46d3d502943f184d4315', // Updated - Matches API response for wallet 0xdd84...
   },
 
   // --- Silo Sonic USDC.e Reserve ---
