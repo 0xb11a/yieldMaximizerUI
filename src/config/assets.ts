@@ -103,7 +103,9 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     apiProtocolName: 'INIT Capital',
     apiPoolId: '0xf82cbcab75c1138a8f1f20179613e7c0c8337346',
   },  
-  {
+
+  // --- Merchant Moe USDC-USDT Pool ---
+  /*{
     id: 'merchantmoe-usdc-usdt',
     name: 'Merchant Moe USDC-USDT Pool',
     type: 'pool',
@@ -120,7 +122,7 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     apiTokenId: MANTLE_USDC.address.toLowerCase(), // Match the USDC token ID
     apiProtocolName: 'Merchant Moe',
     apiPoolId: '0x48c1a89af1102cad358549e9bb16ae5f96cddfec', // Pool ID from API example for USDC
-  },
+  },*/
 
   // --- SONIC ASSETS ---
   // --- Wallet USDC.e ---

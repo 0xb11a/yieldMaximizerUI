@@ -268,15 +268,17 @@ export async function fetchOptimalAllocation(
           investments: data.details.map(item => ({
             name: item.name,
             allocation: item.allocated_amount,
-            expected_return: item.total_apy,
+            // Use APY values directly as percentages
+            expected_return: item.total_apy ?? 0, 
             expectedProfit: item.expected_profit,
-            reserve_apy: item.base_apy,
-            rewards_apy: item.rewards_apy,
-            total_apr: item.total_apr,
-            base_apr: item.base_apr,         
-            rewards_apr: item.rewards_apr,   
+            reserve_apy: item.base_apy ?? 0,   
+            rewards_apy: item.rewards_apy ?? 0, 
+            // Map APY to APR fields directly (assuming API doesn't provide separate APR)
+            total_apr: item.total_apy ?? 0,     
+            base_apr: item.base_apy ?? 0,      
+            rewards_apr: item.rewards_apy ?? 0, 
             type: item.type,
-            percentage: item.percentage === null ? 0 : item.percentage 
+            percentage: item.percentage === null ? 0 : item.percentage
           })),
           total_profit: data.total_profit,
           // Use sanitized totalFunds if needed, or ensure it's not 0 before division
