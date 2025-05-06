@@ -192,6 +192,14 @@ export async function fetchPoolAndReserveData(walletAddress: string): Promise<Fe
   }
 }
 
+// Helper function to format numbers to a max of 4 decimal places
+const formatNumberToMaxFourDecimals = (num: number | undefined | null): number => {
+  if (num === undefined || num === null || isNaN(num)) {
+    return 0; // Or handle as an error, or return undefined/null based on desired behavior
+  }
+  return parseFloat(num.toFixed(4));
+};
+
 /**
  * Generates the request body for the allocation API
  * @param reserves - Array of available lending reserves
@@ -206,13 +214,30 @@ export function generateAllocationRequestBody(
   pools: Pool[],
   minAllocationPercent?: number
 ): AllocationRequestBody {
+  // Helper to format all numeric values in an object
+  const formatObjectNumbers = (obj: any) => {
+    const newObj: any = {};
+    for (const key in obj) {
+      if (typeof obj[key] === 'number') {
+        newObj[key] = formatNumberToMaxFourDecimals(obj[key]);
+      } else {
+        newObj[key] = obj[key];
+      }
+    }
+    return newObj;
+  };
+
+  // Remove address field and format numbers before sending to API
+  const poolsFormatted = pools.map(({ address, ...rest }) => formatObjectNumbers(rest));
+  const reservesFormatted = reserves.map(({ address, ...rest }) => formatObjectNumbers(rest));
+
   const body: AllocationRequestBody = {
-    total_funds: totalFunds,
-    pools: pools,
-    reserves: reserves,
+    total_funds: formatNumberToMaxFourDecimals(totalFunds),
+    pools: poolsFormatted,     // Use formatted arrays
+    reserves: reservesFormatted, // Use formatted arrays
   };
   if (minAllocationPercent !== undefined) {
-    body.min_allocation_percent = minAllocationPercent;
+    body.min_allocation_percent = formatNumberToMaxFourDecimals(minAllocationPercent);
   }
   return body;
 }
