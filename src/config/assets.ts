@@ -8,6 +8,7 @@ export interface TokenInfo {
 // Network Chain IDs
 export const MANTLE_CHAIN_ID = 5000;
 export const SONIC_CHAIN_ID = 146;
+export const BASE_CHAIN_ID = 8453;
 
 // New Asset Configuration Structure
 export interface AssetConfig {
@@ -38,6 +39,11 @@ export const MANTLE_USDC: TokenInfo = {
 // Define Sonic USDC.e based on search results
 export const SONIC_USDCe: TokenInfo = {
     address: '0x29219dd400f2bf60e5a23d13be72b486d4038894',
+};
+
+// Define Base USDC
+export const BASE_USDC: TokenInfo = {
+    address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
 };
 
 
@@ -202,11 +208,70 @@ export const SUPPORTED_ASSETS: AssetConfig[] = [
     apiProtocolName: 'Silo', 
     apiPoolId: '0x062a36bbe0306c2fd7aecdf25843291fbab96ad2',
   },
+
+  // --- BASE ASSETS ---
+  // --- Wallet BASE USDC ---
+  {
+    id: 'wallet-base-usdc',
+    name: 'Wallet USDC',
+    type: 'reserve',
+    chainId: BASE_CHAIN_ID,
+    source: 'wallet',
+    contractAddress: BASE_USDC.address,
+    decimals: 6,
+    underlyingTokens: [{ address: BASE_USDC.address }],
+    apiType: 'reserve',
+    logoUrl: undefined,
+    allocationKey: 'PLACEHOLDER_WALLET_BASE_USDC_KEY',
+    apiTokenId: BASE_USDC.address.toLowerCase(),
+    apiProtocolName: undefined,
+    apiPoolId: undefined,
+  },
+
+  // --- Aave Base USDC Reserve ---
+  {
+    id: 'aave-base-usdc',
+    name: 'Aave USDC Reserve',
+    type: 'reserve',
+    chainId: BASE_CHAIN_ID,
+    source: 'Aave Base',
+    contractAddress: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
+    decimals: 6,
+    underlyingTokens: [{ address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913' }],
+    apiType: 'reserve',
+    apiName: 'USDC Reserve',
+    logoUrl: '/svg/aave-logo.svg',
+    explorerUrl: 'https://basescan.org/token/0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
+    allocationKey: 'USDC Reserve Aave Base',
+    apiTokenId: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
+    apiProtocolName: 'Aave V3',
+    apiPoolId: '0xA238Dd80C259a72e81d7e4664a9801593F98d1c5', // This is a placeholder, needs to be updated with the correct pool ID
+  },
+
+  // --- Moonwell Base USDC Reserve ---
+  {
+    id: 'moonwell-base-usdc',
+    name: 'Moonwell USDC Reserve',
+    type: 'reserve',
+    chainId: BASE_CHAIN_ID,
+    source: 'Moonwell Base',
+    contractAddress: '0xedc817a28e8b93b03976fbd4a3ddbc9f7d176c22',
+    decimals: 6,
+    underlyingTokens: [{ address: BASE_USDC.address }],
+    apiType: 'reserve',
+    apiName: 'USDC Reserve',
+    logoUrl: '/svg/moonwell-logo.svg',
+    explorerUrl: 'https://basescan.org/token/0xedc817a28e8b93b03976fbd4a3ddbc9f7d176c22',
+    allocationKey: 'USDC Reserve Moonwell Base',
+    apiTokenId: BASE_USDC.address.toLowerCase(),
+    apiProtocolName: 'Moonwell',
+    apiPoolId: '0xedc817a28e8b93b03976fbd4a3ddbc9f7d176c22',
+  },
 ];
 
 
 // Modified function to accept optional network filter
-export type NetworkFilter = 'all' | 'mantle' | 'sonic';
+export type NetworkFilter = 'all' | 'mantle' | 'sonic' | 'base';
 
 export const getAssetsForApi = (networkFilter: NetworkFilter = 'all'): { type: 'pool' | 'reserve'; address: Address; source?: string }[] => {
   const uniqueFunds = new Map<string, { type: 'pool' | 'reserve'; address: Address; source?: string }>();
@@ -223,6 +288,9 @@ export const getAssetsForApi = (networkFilter: NetworkFilter = 'all'): { type: '
         return;
     }
     if (networkFilter === 'sonic' && assetChainId !== SONIC_CHAIN_ID) {
+        return;
+    }
+    if (networkFilter === 'base' && assetChainId !== BASE_CHAIN_ID) {
         return;
     }
     // 'all' includes everything (no return)
