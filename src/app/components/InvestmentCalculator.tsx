@@ -360,16 +360,18 @@ export default function InvestmentCalculator({ supplyFunds = 0, walletBalances =
         if (holding.name === 'Wallet USDC' || holding.name === 'Wallet USDC.e') {
             return; // Skip wallet balance
         }
-        const holdingAmount = holding.balance;
+        const holdingAmount = holding.balance; // User's balance in this specific holding
         if (holding.type === 'pool') {
             const poolToAdjust = findAdjustedPool(holding);
             if (poolToAdjust) {
                 const liquidityField = 'pool_distribution';
                 if (liquidityField in poolToAdjust && typeof poolToAdjust[liquidityField] === 'number') {
                     const currentLiquidity = poolToAdjust[liquidityField];
+                    const amountToWithdraw = Math.min(holdingAmount, currentLiquidity);
+                    console.log(`Max withdrawal calculation for Pool ${poolToAdjust.name}: Math.min(User Balance: ${holdingAmount}, Available Liquidity: ${currentLiquidity}) = ${amountToWithdraw}`);
                     // Include pool name and source (if available) in log
-                    console.log(`Adjusting pool ${poolToAdjust.name} (${poolToAdjust.source ?? 'Unknown Source'}): reducing ${liquidityField} (${currentLiquidity}) by ${holdingAmount}`);
-                    poolToAdjust[liquidityField] = Math.max(0, currentLiquidity - holdingAmount);
+                    console.log(`Adjusting pool ${poolToAdjust.name} (${poolToAdjust.source ?? 'Unknown Source'}): reducing ${liquidityField} (${currentLiquidity}) by ${amountToWithdraw} (User balance: ${holdingAmount}, Available: ${currentLiquidity})`);
+                    poolToAdjust[liquidityField] = Math.max(0, currentLiquidity - amountToWithdraw);
                 } else {
                     console.warn(`Pool ${poolToAdjust.name} (Holding: ${holding.name}) does not have valid numerical field '${liquidityField}'`);
                 }
@@ -380,13 +382,28 @@ export default function InvestmentCalculator({ supplyFunds = 0, walletBalances =
             const reserveToAdjust = findAdjustedReserve(holding);
             if (reserveToAdjust) {
                 const supplyField = 'total_supplied';
-                if (supplyField in reserveToAdjust && typeof reserveToAdjust[supplyField] === 'number') {
-                    const currentSupply = reserveToAdjust[supplyField];
+                if (supplyField in reserveToAdjust && typeof reserveToAdjust[supplyField] === 'number' && 'total_borrowed' in reserveToAdjust && typeof reserveToAdjust.total_borrowed === 'number') {
+                    const currentTotalSupplied = reserveToAdjust[supplyField];
+                    const currentTotalBorrowed = reserveToAdjust.total_borrowed;
+                    const availableReserveLiquidity = Math.max(0, currentTotalSupplied - currentTotalBorrowed);
+                    
+                    const amountToWithdraw = Math.min(holdingAmount, availableReserveLiquidity);
+                    
+                    console.log(`Max withdrawal calculation for Reserve ${reserveToAdjust.name}: 
+                        User Balance: ${holdingAmount}, 
+                        Total Supplied: ${currentTotalSupplied}, 
+                        Total Borrowed: ${currentTotalBorrowed}, 
+                        Available Liquidity: ${availableReserveLiquidity}, 
+                        Amount to Withdraw: ${amountToWithdraw}`);
+                    
                     // Include reserve name and source in log for clarity
-                    console.log(`Adjusting reserve ${reserveToAdjust.name} (${reserveToAdjust.source ?? 'Unknown Source'}): reducing ${supplyField} (${currentSupply}) by ${holdingAmount}`);
-                    reserveToAdjust[supplyField] = Math.max(0, currentSupply - holdingAmount);
+                    console.log(`Adjusting reserve ${reserveToAdjust.name} (${reserveToAdjust.source ?? 'Unknown Source'}): 
+                        Reducing ${supplyField} (${currentTotalSupplied}) by ${amountToWithdraw}. 
+                        User balance: ${holdingAmount}, Available Liquidity: ${availableReserveLiquidity}`);
+                    
+                    reserveToAdjust[supplyField] = Math.max(0, currentTotalSupplied - amountToWithdraw);
                 } else {
-                    console.warn(`Reserve ${reserveToAdjust.name} (Holding: ${holding.name}) does not have valid numerical field '${supplyField}'`);
+                    console.warn(`Reserve ${reserveToAdjust.name} (Holding: ${holding.name}) does not have valid numerical fields '${supplyField}' or 'total_borrowed'`);
                 }
             } else {
                 console.warn(`Could not find matching adjusted reserve for holding: ${holding.name}`);
